@@ -1,0 +1,1457 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model EFMigrationsHistory {
+  migration_id    String @id(map: "pk___ef_migrations_history") @db.VarChar(150)
+  product_version String @db.VarChar(32)
+
+  @@map("__EFMigrationsHistory")
+}
+
+model accounts {
+  id                  BigInt                @id(map: "pk_accounts") @default(autoincrement())
+  company_id          BigInt
+  account_code        String
+  account_name        String
+  account_type        String
+  parent_account_id   BigInt?
+  active              Boolean
+  created_at          DateTime              @db.Timestamptz(6)
+  accounts            accounts?             @relation("accountsToaccounts", fields: [parent_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_accounts_accounts_parent_account_id")
+  other_accounts      accounts[]            @relation("accountsToaccounts")
+  journal_entry_lines journal_entry_lines[]
+
+  @@index([parent_account_id], map: "ix_accounts_parent_account_id")
+}
+
+model asset_balances {
+  id              BigInt    @id @default(autoincrement())
+  company_id      BigInt
+  item_id         BigInt
+  party_type      String    @db.VarChar(50)
+  party_id        BigInt
+  quantity        Decimal   @db.Decimal(18, 3)
+  last_updated_at DateTime  @default(now()) @db.Timestamptz(6)
+  companies       companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asset_balances_company_fk")
+  items           items     @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asset_balances_item_fk")
+
+  @@unique([company_id, item_id, party_type, party_id], map: "ux_asset_balances_unique")
+  @@index([item_id], map: "IX_asset_balances_item_id")
+}
+
+model asset_history_logs {
+  id                BigInt       @id(map: "PK_asset_history_logs") @default(autoincrement())
+  fixed_asset_id    BigInt
+  date              DateTime     @db.Timestamptz(6)
+  event_type        String       @db.VarChar(100)
+  description       String       @db.VarChar(500)
+  performed_by_code String?      @db.VarChar(50)
+  performed_by_name String?      @db.VarChar(150)
+  cost_impact       String?      @db.VarChar(100)
+  fixed_assets      fixed_assets @relation(fields: [fixed_asset_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_asset_history_logs_fixed_assets_FixedAssetId")
+
+  @@index([fixed_asset_id], map: "IX_asset_history_logs_fixed_asset_id")
+}
+
+model asset_movements {
+  id              BigInt    @id @default(autoincrement())
+  company_id      BigInt
+  movement_date   DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Timestamptz(6)
+  item_id         BigInt
+  from_party_type String    @db.VarChar(50)
+  from_party_id   BigInt
+  to_party_type   String    @db.VarChar(50)
+  to_party_id     BigInt
+  quantity        Decimal   @db.Decimal(18, 3)
+  movement_type   String    @db.VarChar(30)
+  notes           String?
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  companies       companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asset_movements_company_fk")
+  items           items     @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asset_movements_item_fk")
+
+  @@index([company_id], map: "IX_asset_movements_company_id")
+  @@index([from_party_type, from_party_id], map: "idx_asset_movements_from")
+  @@index([item_id], map: "idx_asset_movements_item")
+  @@index([to_party_type, to_party_id], map: "idx_asset_movements_to")
+}
+
+model audit_logs {
+  id          BigInt   @id(map: "pk_audit_logs") @default(autoincrement())
+  company_id  BigInt
+  table_name  String
+  primary_key String
+  action      String
+  old_values  Json?
+  new_values  Json?
+  user_id     String
+  created_at  DateTime @db.Timestamptz(6)
+}
+
+model branch_transfers {
+  id                                                               BigInt     @id @default(autoincrement())
+  company_id                                                       BigInt?    @default(1)
+  transfer_number                                                  String     @db.VarChar(50)
+  transfer_date                                                    DateTime   @default(dbgenerated("CURRENT_DATE")) @db.Date
+  source_warehouse_id                                              BigInt
+  destination_warehouse_id                                         BigInt
+  destination_branch_id                                            BigInt
+  item_id                                                          BigInt
+  batch_number                                                     String?    @db.VarChar(100)
+  dispatched_qty                                                   Decimal    @db.Decimal(18, 2)
+  dispatched_count                                                 Int        @default(1)
+  driver_name                                                      String?    @db.VarChar(150)
+  vehicle_number                                                   String?    @db.VarChar(50)
+  dispatcher_name                                                  String?    @db.VarChar(150)
+  received_qty                                                     Decimal?   @db.Decimal(18, 2)
+  received_count                                                   Int?
+  receiver_name                                                    String?    @db.VarChar(150)
+  status                                                           String     @default("IN_TRANSIT") @db.VarChar(50)
+  dispute_reason                                                   String?
+  dispute_charge_to                                                String?    @db.VarChar(150)
+  dispute_notes                                                    String?
+  resolved_by                                                      String?    @db.VarChar(150)
+  notes                                                            String?
+  created_at                                                       DateTime?  @default(now()) @db.Timestamptz(6)
+  updated_at                                                       DateTime?  @default(now()) @db.Timestamptz(6)
+  container_type                                                   String?    @default("سرفيس") @db.VarChar(50)
+  inner_count                                                      Int?       @default(0)
+  crate_count                                                      Int?       @default(0)
+  received_inner_count                                             Int?       @default(0)
+  received_crate_count                                             Int?       @default(0)
+  branches                                                         branches   @relation(fields: [destination_branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses_branch_transfers_destination_warehouse_idTowarehouses warehouses @relation("branch_transfers_destination_warehouse_idTowarehouses", fields: [destination_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items                                                            items      @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses_branch_transfers_source_warehouse_idTowarehouses      warehouses @relation("branch_transfers_source_warehouse_idTowarehouses", fields: [source_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([destination_branch_id], map: "idx_branch_transfers_branch")
+  @@index([item_id], map: "idx_branch_transfers_item")
+  @@index([status], map: "idx_branch_transfers_status")
+}
+
+model branches {
+  id               BigInt             @id @default(autoincrement())
+  company_id       BigInt
+  branch_name      String             @db.VarChar(200)
+  branch_code      String             @db.VarChar(50)
+  phone            String?            @db.VarChar(50)
+  address          String?
+  active           Boolean            @default(true)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
+  branch_transfers branch_transfers[]
+  companies        companies          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  employees        employees[]
+  sales_invoices   sales_invoices[]
+  sales_orders     sales_orders[]
+  warehouses       warehouses[]
+
+  @@unique([company_id, branch_code])
+  @@unique([company_id, branch_code], map: "ux_branches_company_code")
+  @@index([company_id], map: "ix_branches_company_id")
+}
+
+model circulating_containers {
+  id                                 Int     @id(map: "PK_circulating_containers") @default(autoincrement())
+  container_name                     String  @unique(map: "IX_circulating_containers_container_name") @db.VarChar(150)
+  specification                      String? @db.VarChar(200)
+  total_factory_quantity             Int
+  in_production_floor_quantity       Int
+  in_packaging_warehouse_quantity    Int
+  with_drivers_and_branches_quantity Int
+  disputed_quantity                  Int
+  damaged_quantity                   Int
+}
+
+model companies {
+  id                                BigInt                      @id @default(autoincrement())
+  company_name                      String                      @db.VarChar(200)
+  company_code                      String                      @unique @db.VarChar(50)
+  phone                             String?                     @db.VarChar(50)
+  email                             String?                     @db.VarChar(150)
+  address                           String?
+  active                            Boolean                     @default(true)
+  created_at                        DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                        DateTime                    @default(now()) @db.Timestamptz(6)
+  tenant_code                       String?                     @unique @db.VarChar(50)
+  tenant_key                        String?                     @db.VarChar(100)
+  asset_balances                    asset_balances[]
+  asset_movements                   asset_movements[]
+  branches                          branches[]
+  crate_client_transactions         crate_client_transactions[]
+  crate_clients                     crate_clients[]
+  customers                         customers[]
+  departments                       departments[]
+  employees                         employees[]
+  item_categories                   item_categories[]
+  items                             items[]
+  job_titles                        job_titles[]
+  maintenance_assets                maintenance_assets[]
+  maintenance_orders                maintenance_orders[]
+  production_orders                 production_orders[]
+  purchase_orders                   purchase_orders[]
+  quality_inspections               quality_inspections[]
+  recipes                           recipes[]
+  roles                             roles[]
+  sales_orders                      sales_orders[]
+  stock_balances                    stock_balances[]
+  stock_movements                   stock_movements[]
+  stock_transfers                   stock_transfers[]
+  suppliers                         suppliers[]
+  unit_conversions                  unit_conversions[]
+  units                             units[]
+  users_users_CompanyIdTocompanies  users[]                     @relation("users_CompanyIdTocompanies")
+  users_users_company_idTocompanies users[]                     @relation("users_company_idTocompanies")
+  warehouses                        warehouses[]
+  waste_records                     waste_records[]
+}
+
+model crate_client_transactions {
+  id               BigInt        @id @default(autoincrement())
+  company_id       BigInt
+  crate_client_id  BigInt
+  transaction_type String        @db.VarChar(20)
+  quantity         Int
+  transaction_date DateTime      @default(now()) @db.Timestamptz(6)
+  notes            String?       @db.VarChar(500)
+  companies        companies     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  crate_clients    crate_clients @relation(fields: [crate_client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([company_id], map: "ix_crate_client_transactions_company_id")
+  @@index([crate_client_id], map: "ix_crate_client_transactions_crate_client_id")
+  @@index([transaction_date], map: "ix_crate_client_transactions_transaction_date")
+}
+
+model crate_clients {
+  id                        BigInt                      @id @default(autoincrement())
+  company_id                BigInt
+  name                      String                      @db.VarChar(200)
+  crate_balance             Int                         @default(0)
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  crate_client_transactions crate_client_transactions[]
+  companies                 companies                   @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([company_id, name], map: "ix_crate_clients_company_id_name")
+  @@index([company_id], map: "ix_crate_clients_company_id")
+}
+
+model crate_movements {
+  id                   BigInt    @id(map: "PK_crate_movements") @default(autoincrement())
+  movement_number      String    @unique(map: "IX_crate_movements_movement_number") @db.VarChar(50)
+  created_at           DateTime  @db.Timestamptz(6)
+  movement_type        String    @db.VarChar(50)
+  container_name       String    @db.VarChar(150)
+  dispatched_quantity  Int
+  source_location      String    @db.VarChar(150)
+  dispatched_by_code   String    @db.VarChar(50)
+  dispatched_by_name   String    @db.VarChar(150)
+  destination_location String    @db.VarChar(150)
+  notes                String?   @db.VarChar(500)
+  received_quantity    Int?
+  shortage_quantity    Int
+  damaged_count        Int
+  received_at          DateTime? @db.Timestamptz(6)
+  received_by_code     String?   @db.VarChar(50)
+  received_by_name     String?   @db.VarChar(150)
+  receive_notes        String?   @db.VarChar(500)
+  status               String    @db.VarChar(50)
+  arbitration_decision String?   @db.VarChar(100)
+  arbitration_text     String?   @db.VarChar(500)
+  arbitrated_by_code   String?   @db.VarChar(50)
+  arbitrated_by_name   String?   @db.VarChar(150)
+  financial_penalty    String?   @db.VarChar(100)
+}
+
+model crate_transactions {
+  id               BigInt   @id(map: "PK_crate_transactions") @default(autoincrement())
+  crate_id         BigInt
+  transaction_date DateTime @db.Timestamptz(6)
+  transaction_type String
+  party_type       String
+  party_id         BigInt
+  quantity         Int
+  notes            String?
+  crates           crates   @relation(fields: [crate_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_crate_transactions_crates_crate_id")
+
+  @@index([crate_id], map: "IX_crate_transactions_crate_id")
+}
+
+model crates {
+  id                    BigInt               @id(map: "PK_crates") @default(autoincrement())
+  crate_name            String
+  total_factory_balance Int
+  crate_transactions    crate_transactions[]
+}
+
+model customers {
+  id            BigInt         @id @default(autoincrement())
+  company_id    BigInt
+  customer_name String         @db.VarChar(200)
+  customer_code String         @db.VarChar(50)
+  customer_type String         @default("RETAIL") @db.VarChar(30)
+  phone         String?        @db.VarChar(50)
+  email         String?        @db.VarChar(150)
+  address       String?
+  tax_number    String?        @db.VarChar(100)
+  payment_terms String?        @db.VarChar(100)
+  credit_limit  Decimal        @db.Decimal(18, 2)
+  active        Boolean        @default(true)
+  notes         String?
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime       @default(now()) @db.Timestamptz(6)
+  companies     companies      @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sales_orders  sales_orders[]
+
+  @@unique([company_id, customer_code])
+  @@unique([company_id, customer_code], map: "ux_customers_company_code")
+  @@index([company_id], map: "ix_customers_company_id")
+}
+
+model departments {
+  id                    BigInt                  @id @default(autoincrement())
+  company_id            BigInt
+  parent_department_id  BigInt?
+  department_name       String
+  department_code       String
+  description           String
+  active                Boolean
+  created_at            DateTime                @db.Timestamptz(6)
+  updated_at            DateTime?               @db.Timestamptz(6)
+  companies             companies               @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments           departments?            @relation("departmentsTodepartments", fields: [parent_department_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "departments_parent_id_fkey")
+  other_departments     departments[]           @relation("departmentsTodepartments")
+  employees             employees[]
+  items                 items[]
+  maintenance_assets    maintenance_assets[]
+  material_requisitions material_requisitions[]
+
+  @@unique([company_id, department_code])
+  @@index([parent_department_id], map: "IX_departments_parent_department_id")
+}
+
+model dynamic_forms {
+  id               BigInt             @id @default(autoincrement())
+  form_name        String             @db.VarChar(255)
+  form_code        String             @unique @db.VarChar(100)
+  description      String?
+  fields_schema    String
+  is_active        Boolean?           @default(true)
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  form_submissions form_submissions[]
+}
+
+model emergency_tasks {
+  id                        BigInt    @id @default(autoincrement())
+  task_number               String?   @unique @db.VarChar(50)
+  title                     String    @db.VarChar(250)
+  description               String?
+  sender_department         String    @db.VarChar(150)
+  sender_employee_code      String?   @db.VarChar(50)
+  sender_employee_name      String?   @db.VarChar(150)
+  target_department         String    @db.VarChar(150)
+  target_employee_name      String?   @db.VarChar(150)
+  assigned_technician_code  String?   @db.VarChar(50)
+  assigned_technician_name  String?   @db.VarChar(150)
+  assignment_notes          String?
+  priority                  String?   @default("NORMAL") @db.VarChar(30)
+  media_type                String?   @default("TEXT") @db.VarChar(30)
+  media_url                 String?
+  media_file_name           String?   @db.VarChar(200)
+  created_at                DateTime? @default(now()) @db.Timestamptz(6)
+  target_resolution_minutes Int?      @default(30)
+  responded_at              DateTime? @db.Timestamptz(6)
+  completed_at              DateTime? @db.Timestamptz(6)
+  status                    String?   @default("PENDING") @db.VarChar(50)
+  closure_notes             String?
+  closure_proof_media_url   String?
+  closed_by                 String?   @db.VarChar(150)
+  closed_by_code            String?   @db.VarChar(50)
+  asset_code                String?   @db.VarChar(50)
+  cost_impact               String?   @db.VarChar(150)
+  spare_parts_used          String?
+  root_cause                String?
+  downtime_minutes          Int?      @default(0)
+
+  @@index([task_number], map: "idx_emergency_tasks_number")
+  @@index([status], map: "idx_emergency_tasks_status")
+}
+
+model employee_shifts {
+  id          BigInt    @id(map: "pk_employee_shifts") @default(autoincrement())
+  employee_id BigInt
+  shift_id    BigInt
+  work_date   DateTime  @db.Timestamptz(6)
+  status      String
+  employees   employees @relation(fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_employee_shifts_employees_employee_id")
+  shifts      shifts    @relation(fields: [shift_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_employee_shifts_shifts_shift_id")
+
+  @@index([employee_id], map: "ix_employee_shifts_employee_id")
+  @@index([shift_id], map: "ix_employee_shifts_shift_id")
+}
+
+model employees {
+  id                       BigInt                     @id @default(autoincrement())
+  company_id               BigInt
+  branch_id                BigInt?
+  department_id            BigInt?
+  job_title_id             BigInt?
+  manager_id               BigInt?
+  employee_name            String                     @db.VarChar(150)
+  employee_code            String                     @db.VarChar(50)
+  active                   Boolean
+  created_at               DateTime                   @db.Timestamptz(6)
+  employee_shifts          employee_shifts[]
+  branches                 branches?                  @relation(fields: [branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_employees_branches_branch_id")
+  companies                companies                  @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_employees_companies_company_id")
+  job_titles               job_titles?                @relation(fields: [job_title_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_employees_job_titles_job_title_id")
+  departments              departments?               @relation(fields: [department_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  employees                employees?                 @relation("employeesToemployees", fields: [manager_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  other_employees          employees[]                @relation("employeesToemployees")
+  production_order_details production_order_details[]
+
+  @@index([branch_id], map: "IX_employees_branch_id")
+  @@index([company_id], map: "IX_employees_company_id")
+  @@index([department_id], map: "IX_employees_department_id")
+  @@index([job_title_id], map: "IX_employees_job_title_id")
+  @@index([manager_id], map: "IX_employees_manager_id")
+}
+
+model finished_goods_transfers {
+  id                                                                       BigInt     @id @default(autoincrement())
+  transfer_number                                                          String     @unique @db.VarChar(50)
+  transfer_date                                                            DateTime   @default(dbgenerated("CURRENT_DATE")) @db.Date
+  production_order_id                                                      BigInt?
+  source_warehouse_id                                                      BigInt
+  destination_warehouse_id                                                 BigInt
+  item_id                                                                  BigInt
+  batch_number                                                             String     @db.VarChar(100)
+  expiry_date                                                              DateTime?  @db.Date
+  prod_dispatched_qty                                                      Decimal    @db.Decimal(12, 2)
+  prod_dispatched_count                                                    Int?       @default(0)
+  prod_notes                                                               String?
+  prod_submitted_by                                                        String?    @default("مشرف الصالة") @db.VarChar(100)
+  costing_actual_qty                                                       Decimal?   @db.Decimal(12, 2)
+  costing_actual_count                                                     Int?
+  costing_weight_diff                                                      Decimal?   @default(0) @db.Decimal(12, 2)
+  costing_count_diff                                                       Int?       @default(0)
+  costing_discrepancy_flag                                                 Boolean?   @default(false)
+  costing_auditor                                                          String?    @db.VarChar(100)
+  costing_audited_at                                                       DateTime?  @db.Timestamp(6)
+  costing_notes                                                            String?
+  qc_approved_qty                                                          Decimal?   @default(0) @db.Decimal(12, 2)
+  qc_sample_qty                                                            Decimal?   @default(0) @db.Decimal(12, 2)
+  qc_rework_qty                                                            Decimal?   @default(0) @db.Decimal(12, 2)
+  qc_scrap_qty                                                             Decimal?   @default(0) @db.Decimal(12, 2)
+  qc_inspector                                                             String?    @db.VarChar(100)
+  qc_inspected_at                                                          DateTime?  @db.Timestamp(6)
+  qc_notes                                                                 String?
+  received_actual_qty                                                      Decimal?   @db.Decimal(12, 2)
+  received_actual_count                                                    Int?
+  control_receiver_name                                                    String?    @db.VarChar(100)
+  control_received_at                                                      DateTime?  @db.Timestamp(6)
+  control_notes                                                            String?
+  has_dispute                                                              Boolean?   @default(false)
+  dispute_reason                                                           String?
+  dispute_status                                                           String?    @default("NONE") @db.VarChar(50)
+  dispute_opened_at                                                        DateTime?  @db.Timestamp(6)
+  dispute_resolved_by                                                      String?    @db.VarChar(100)
+  dispute_resolution_notes                                                 String?
+  dispute_resolved_at                                                      DateTime?  @db.Timestamp(6)
+  status                                                                   String?    @default("PENDING_COSTING") @db.VarChar(50)
+  created_at                                                               DateTime?  @default(now()) @db.Timestamp(6)
+  costing_dispute_status                                                   String?    @default("NONE") @db.VarChar(50)
+  costing_dispute_reason                                                   String?
+  costing_dispute_notes                                                    String?
+  costing_dispute_resolved_by                                              String?    @db.VarChar(100)
+  costing_dispute_resolved_at                                              DateTime?  @db.Timestamp(6)
+  costing_dispute_charge_to                                                String?    @db.VarChar(100)
+  control_dispute_charge_to                                                String?    @db.VarChar(100)
+  warehouses_finished_goods_transfers_destination_warehouse_idTowarehouses warehouses @relation("finished_goods_transfers_destination_warehouse_idTowarehouses", fields: [destination_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items                                                                    items      @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses_finished_goods_transfers_source_warehouse_idTowarehouses      warehouses @relation("finished_goods_transfers_source_warehouse_idTowarehouses", fields: [source_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([transfer_number], map: "idx_fg_transfer_num")
+  @@index([status], map: "idx_fg_transfer_status")
+}
+
+model fixed_assets {
+  id                     BigInt               @id(map: "PK_fixed_assets") @default(autoincrement())
+  asset_code             String               @unique(map: "IX_fixed_assets_asset_code") @db.VarChar(50)
+  name                   String               @db.VarChar(200)
+  department             String               @db.VarChar(150)
+  category               String?              @db.VarChar(100)
+  brand_model            String?              @db.VarChar(150)
+  serial_number          String?              @db.VarChar(100)
+  custodian_code         String?              @db.VarChar(50)
+  custodian_name         String?              @db.VarChar(150)
+  installation_date      DateTime             @db.Timestamptz(6)
+  status                 String               @db.VarChar(50)
+  active_sos_task_number String?              @db.VarChar(50)
+  asset_history_logs     asset_history_logs[]
+}
+
+model form_submissions {
+  id              BigInt        @id @default(autoincrement())
+  form_id         BigInt
+  user_id         BigInt?
+  submission_data String
+  status          String?       @default("Submitted") @db.VarChar(50)
+  submitted_at    DateTime?     @default(now()) @db.Timestamptz(6)
+  dynamic_forms   dynamic_forms @relation(fields: [form_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([form_id], map: "IX_form_submissions_form_id")
+}
+
+model item_categories {
+  id            BigInt    @id @default(autoincrement())
+  company_id    BigInt
+  category_name String    @db.VarChar(200)
+  category_code String    @db.VarChar(50)
+  item_type     String    @db.VarChar(30)
+  description   String?
+  active        Boolean   @default(true)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime  @default(now()) @db.Timestamptz(6)
+  companies     companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items         items[]
+
+  @@unique([company_id, category_code])
+  @@unique([company_id, category_code], map: "ux_item_categories_company_code")
+  @@index([company_id], map: "ix_item_categories_company_id")
+}
+
+model item_unit_conversions {
+  id                BigInt    @id @default(autoincrement())
+  item_id           BigInt
+  unit_name         String    @db.VarChar(50)
+  conversion_factor Decimal   @default(1.0) @db.Decimal(18, 4)
+  price             Decimal?  @default(0) @db.Decimal(18, 2)
+  barcode           String?   @db.VarChar(100)
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  items             items     @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model item_uom_conversions {
+  id                BigInt   @id(map: "PK_item_uom_conversions") @default(autoincrement())
+  company_id        BigInt
+  item_id           BigInt?
+  from_unit         String
+  to_unit           String
+  conversion_factor Decimal  @db.Decimal
+  notes             String
+  created_at        DateTime @db.Timestamptz(6)
+  items             items?   @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_item_uom_conversions_items_item_id")
+
+  @@index([item_id], map: "IX_item_uom_conversions_item_id")
+}
+
+model item_variants {
+  id           BigInt    @id @default(autoincrement())
+  item_id      BigInt
+  variant_name String    @db.VarChar(150)
+  variant_code String?   @db.VarChar(100)
+  price        Decimal?  @default(0) @db.Decimal(18, 2)
+  barcode      String?   @db.VarChar(100)
+  is_active    Boolean?  @default(true)
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+  items        items     @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model items {
+  id                         BigInt                       @id(map: "PK_items") @default(autoincrement())
+  company_id                 BigInt
+  item_code                  String
+  item_name                  String
+  item_type                  String
+  category_id                BigInt
+  unit                       String
+  active                     Boolean                      @default(true)
+  created_at                 DateTime                     @db.Timestamptz(6)
+  parent_item_id             BigInt?
+  has_expiry_date            Boolean                      @default(false)
+  shelf_life_days            Int?
+  department_id              BigInt?
+  reorder_level              Decimal?                     @default(0) @db.Decimal(18, 4)
+  safety_stock               Decimal?                     @default(0) @db.Decimal(18, 4)
+  max_stock                  Decimal?                     @default(0) @db.Decimal(18, 4)
+  department_name            String?                      @db.VarChar(100)
+  base_price                 Decimal?                     @default(0) @db.Decimal(18, 2)
+  barcode                    String?                      @db.VarChar(100)
+  is_variant                 Boolean?                     @default(false)
+  is_merged                  Boolean?                     @default(false)
+  is_container               Boolean?                     @default(false)
+  multi_uom                  Boolean?                     @default(false)
+  hide_detail_print          Boolean?                     @default(false)
+  asset_balances             asset_balances[]
+  asset_movements            asset_movements[]
+  branch_transfers           branch_transfers[]
+  finished_goods_transfers   finished_goods_transfers[]
+  item_unit_conversions      item_unit_conversions[]
+  item_uom_conversions       item_uom_conversions[]
+  item_variants              item_variants[]
+  companies                  companies                    @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_items_companies_company_id")
+  departments                departments?                 @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_items_departments_department_id")
+  item_categories            item_categories              @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_items_item_categories_category_id")
+  items                      items?                       @relation("itemsToitems", fields: [parent_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_items_items_parent_item_id")
+  other_items                items[]                      @relation("itemsToitems")
+  material_requisition_lines material_requisition_lines[]
+  price_list_items           price_list_items[]
+  production_order_details   production_order_details[]
+  production_order_stages    production_order_stages[]
+  production_stage_materials production_stage_materials[]
+  purchase_order_lines       purchase_order_lines[]
+  quality_inspections        quality_inspections[]
+  recipe_lines               recipe_lines[]
+  recipe_stages              recipe_stages[]
+  recipes                    recipes[]
+  sales_order_lines          sales_order_lines[]
+  stock_balances             stock_balances[]
+  stock_movements            stock_movements[]
+  stock_transfer_lines       stock_transfer_lines[]
+  supplier_item_prices       supplier_item_prices[]
+  waste_records              waste_records[]
+
+  @@index([category_id], map: "IX_items_category_id")
+  @@index([company_id], map: "IX_items_company_id")
+  @@index([department_id], map: "IX_items_department_id")
+  @@index([parent_item_id], map: "IX_items_parent_item_id")
+}
+
+model job_titles {
+  id          BigInt      @id @default(autoincrement())
+  company_id  BigInt
+  title_name  String      @db.VarChar(150)
+  job_grade   Int
+  active      Boolean
+  hourly_rate Decimal?    @default(0) @db.Decimal(18, 2)
+  employees   employees[]
+  companies   companies   @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_job_titles_companies_company_id")
+
+  @@unique([company_id, title_name], map: "ux_job_titles_company_title")
+}
+
+model journal_entries {
+  id                  BigInt                @id(map: "pk_journal_entries") @default(autoincrement())
+  company_id          BigInt
+  entry_number        String
+  reference_type      String
+  reference_number    String
+  entry_date          DateTime              @db.Timestamptz(6)
+  status              String
+  notes               String
+  created_at          DateTime              @db.Timestamptz(6)
+  journal_entry_lines journal_entry_lines[]
+}
+
+model journal_entry_lines {
+  id               BigInt          @id(map: "pk_journal_entry_lines") @default(autoincrement())
+  journal_entry_id BigInt
+  account_id       BigInt
+  debit            Decimal         @db.Decimal
+  credit           Decimal         @db.Decimal
+  description      String
+  accounts         accounts        @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_journal_entry_lines_accounts_account_id")
+  journal_entries  journal_entries @relation(fields: [journal_entry_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_journal_entry_lines_journal_entries_journal_entry_id")
+
+  @@index([account_id], map: "ix_journal_entry_lines_account_id")
+  @@index([journal_entry_id], map: "ix_journal_entry_lines_journal_entry_id")
+}
+
+model maintenance_assets {
+  id                 BigInt               @id @default(autoincrement())
+  company_id         BigInt
+  department_id      BigInt?
+  asset_name         String               @db.VarChar(150)
+  asset_code         String               @db.VarChar(50)
+  asset_type         String?              @db.VarChar(100)
+  location           String?              @db.VarChar(150)
+  active             Boolean              @default(true)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime             @default(now()) @db.Timestamptz(6)
+  companies          companies            @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "maintenance_assets_company_fk")
+  departments        departments?         @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "maintenance_assets_department_fk")
+  maintenance_orders maintenance_orders[]
+
+  @@unique([company_id, asset_code])
+  @@index([department_id], map: "IX_maintenance_assets_department_id")
+}
+
+model maintenance_orders {
+  id                 BigInt             @id @default(autoincrement())
+  company_id         BigInt
+  asset_id           BigInt
+  order_number       String             @db.VarChar(50)
+  maintenance_type   String             @default("CORRECTIVE") @db.VarChar(30)
+  priority           String             @default("NORMAL") @db.VarChar(20)
+  status             String             @default("OPEN") @db.VarChar(30)
+  scheduled_date     DateTime?          @db.Date
+  completed_date     DateTime?          @db.Date
+  description        String
+  technician         String?            @db.VarChar(150)
+  cost               Decimal            @db.Decimal(18, 2)
+  notes              String?
+  created_at         DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime           @default(now()) @db.Timestamptz(6)
+  maintenance_assets maintenance_assets @relation(fields: [asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "maintenance_orders_asset_fk")
+  companies          companies          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "maintenance_orders_company_fk")
+
+  @@unique([company_id, order_number])
+  @@index([asset_id], map: "idx_maintenance_asset")
+}
+
+model material_requisition_lines {
+  id                    BigInt                @id @default(autoincrement())
+  requisition_id        BigInt
+  item_id               BigInt
+  requested_qty         Decimal               @db.Decimal(18, 4)
+  dispatched_qty        Decimal               @default(0) @db.Decimal(18, 4)
+  received_qty          Decimal               @default(0) @db.Decimal(18, 4)
+  batch_number          String?               @db.VarChar(100)
+  expiry_date           DateTime?             @db.Date
+  unit_cost             Decimal               @default(0) @db.Decimal(18, 4)
+  line_status           String                @default("PENDING") @db.VarChar(30)
+  discrepancy_reason    String?
+  warehouse_notes       String?
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  from_warehouse_id     BigInt?
+  warehouses            warehouses?           @relation(fields: [from_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items                 items                 @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  material_requisitions material_requisitions @relation(fields: [requisition_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([item_id], map: "idx_mat_req_lines_item")
+}
+
+model material_requisitions {
+  id                                                             BigInt                       @id @default(autoincrement())
+  requisition_number                                             String                       @unique @db.VarChar(50)
+  department_id                                                  BigInt
+  from_warehouse_id                                              BigInt
+  to_warehouse_id                                                BigInt?
+  status                                                         String                       @default("SUBMITTED") @db.VarChar(30)
+  notes                                                          String?
+  requested_by                                                   String?                      @db.VarChar(100)
+  dispatched_by                                                  String?                      @db.VarChar(100)
+  received_by                                                    String?                      @db.VarChar(100)
+  created_at                                                     DateTime                     @default(now()) @db.Timestamptz(6)
+  dispatched_at                                                  DateTime?                    @db.Timestamptz(6)
+  completed_at                                                   DateTime?                    @db.Timestamptz(6)
+  material_requisition_lines                                     material_requisition_lines[]
+  departments                                                    departments                  @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses_material_requisitions_from_warehouse_idTowarehouses warehouses                   @relation("material_requisitions_from_warehouse_idTowarehouses", fields: [from_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses_material_requisitions_to_warehouse_idTowarehouses   warehouses?                  @relation("material_requisitions_to_warehouse_idTowarehouses", fields: [to_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([department_id], map: "idx_mat_req_dept")
+  @@index([status], map: "idx_mat_req_status")
+}
+
+model price_list_items {
+  id            BigInt      @id(map: "pk_price_list_items") @default(autoincrement())
+  price_list_id BigInt
+  item_id       BigInt
+  selling_price Decimal     @db.Decimal
+  items         items       @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_price_list_items_items_item_id")
+  price_lists   price_lists @relation(fields: [price_list_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_price_list_items_price_lists_price_list_id")
+
+  @@index([item_id], map: "ix_price_list_items_item_id")
+  @@index([price_list_id], map: "ix_price_list_items_price_list_id")
+}
+
+model price_lists {
+  id               BigInt             @id(map: "pk_price_lists") @default(autoincrement())
+  company_id       BigInt
+  name             String
+  is_active        Boolean
+  price_list_items price_list_items[]
+}
+
+model production_order_details {
+  id                      BigInt                    @id @default(autoincrement())
+  production_order_id     BigInt
+  item_id                 BigInt
+  recipe_id               BigInt?
+  planned_quantity        Decimal                   @db.Decimal(14, 3)
+  produced_quantity       Decimal                   @db.Decimal(14, 3)
+  status                  String                    @default("PENDING") @db.VarChar(30)
+  notes                   String?
+  Employee_id             BigInt?
+  working_hours           Decimal                   @db.Decimal(10, 2)
+  waste_quantity          Decimal                   @db.Decimal(14, 3)
+  BatchNumber             String?
+  CreatedAt               DateTime                  @default(dbgenerated("'-infinity'::timestamp with time zone")) @db.Timestamptz(6)
+  Unit                    String                    @default("")
+  UpdatedAt               DateTime                  @default(dbgenerated("'-infinity'::timestamp with time zone")) @db.Timestamptz(6)
+  employees               employees?                @relation(fields: [Employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_production_order_details_employees_Employee_id")
+  items                   items                     @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_order_details_item_fk")
+  production_orders       production_orders         @relation(fields: [production_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "production_order_details_order_fk")
+  recipes                 recipes?                  @relation(fields: [recipe_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_order_details_recipe_fk")
+  production_order_stages production_order_stages[]
+
+  @@index([Employee_id], map: "IX_production_order_details_Employee_id")
+  @@index([item_id], map: "IX_production_order_details_item_id")
+  @@index([production_order_id], map: "IX_production_order_details_production_order_id")
+  @@index([recipe_id], map: "IX_production_order_details_recipe_id")
+}
+
+model production_order_stages {
+  id                         BigInt                       @id @default(autoincrement())
+  production_order_detail_id BigInt
+  stage_number               Int
+  item_id                    BigInt
+  recipe_stage_id            BigInt?
+  planned_quantity           Decimal                      @db.Decimal(14, 3)
+  produced_quantity          Decimal                      @db.Decimal(14, 3)
+  status                     String                       @default("PENDING") @db.VarChar(30)
+  notes                      String?
+  created_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  RecipeId                   BigInt?
+  recipes                    recipes?                     @relation(fields: [RecipeId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_production_order_stages_recipes_RecipeId")
+  production_order_details   production_order_details     @relation(fields: [production_order_detail_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "production_stages_detail_fk")
+  items                      items                        @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_stages_item_fk")
+  recipe_stages              recipe_stages?               @relation(fields: [recipe_stage_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_stages_recipe_stage_fk")
+  production_stage_materials production_stage_materials[]
+  quality_inspections        quality_inspections[]
+  waste_records              waste_records[]
+
+  @@unique([production_order_detail_id, stage_number], map: "production_stages_unique")
+  @@index([RecipeId], map: "IX_production_order_stages_RecipeId")
+  @@index([production_order_detail_id], map: "idx_production_stages_detail")
+  @@index([item_id], map: "idx_production_stages_item")
+  @@index([recipe_stage_id], map: "idx_production_stages_recipe_stage")
+}
+
+model production_orders {
+  id                       BigInt                     @id @default(autoincrement())
+  company_id               BigInt
+  warehouse_id             BigInt
+  order_number             String                     @db.VarChar(50)
+  order_date               DateTime                   @default(dbgenerated("CURRENT_DATE")) @db.Date
+  status                   String                     @default("DRAFT") @db.VarChar(30)
+  notes                    String?
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  created_by               BigInt?
+  RecipeId                 BigInt?
+  production_order_details production_order_details[]
+  recipes                  recipes?                   @relation(fields: [RecipeId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_production_orders_recipes_RecipeId")
+  companies                companies                  @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_orders_company_fk")
+  warehouses               warehouses                 @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_orders_warehouse_fk")
+  quality_inspections      quality_inspections[]
+  waste_records            waste_records[]
+
+  @@unique([company_id, order_number], map: "production_orders_company_order_number_unique")
+  @@index([RecipeId], map: "IX_production_orders_RecipeId")
+  @@index([warehouse_id], map: "IX_production_orders_warehouse_id")
+  @@index([status], map: "idx_production_orders_status")
+}
+
+model production_stage_materials {
+  id                      BigInt                  @id @default(autoincrement())
+  production_stage_id     BigInt
+  item_id                 BigInt
+  required_quantity       Decimal                 @db.Decimal(14, 3)
+  consumed_quantity       Decimal                 @db.Decimal(14, 3)
+  unit                    String                  @db.VarChar(50)
+  waste_percentage        Decimal                 @db.Decimal(8, 3)
+  notes                   String?
+  created_at              DateTime                @default(now()) @db.Timestamptz(6)
+  recipe_line_id          BigInt?
+  recipe_lines            recipe_lines?           @relation(fields: [recipe_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_material_recipe_line_fk")
+  items                   items                   @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "production_materials_item_fk")
+  production_order_stages production_order_stages @relation(fields: [production_stage_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "production_materials_stage_fk")
+
+  @@index([recipe_line_id], map: "idx_production_material_recipe_line")
+  @@index([item_id], map: "idx_production_materials_item")
+  @@index([production_stage_id], map: "idx_production_materials_stage")
+}
+
+model purchase_invoice_lines {
+  id                  BigInt            @id(map: "PK_purchase_invoice_lines") @default(autoincrement())
+  purchase_invoice_id BigInt
+  item_id             BigInt
+  quantity            Decimal           @db.Decimal
+  unit_price          Decimal           @db.Decimal
+  line_total          Decimal           @db.Decimal
+  purchase_invoices   purchase_invoices @relation(fields: [purchase_invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_purchase_invoice_lines_purchase_invoices_purchase_invoice_id")
+
+  @@index([purchase_invoice_id], map: "IX_purchase_invoice_lines_purchase_invoice_id")
+}
+
+model purchase_invoices {
+  id                     BigInt                   @id(map: "PK_purchase_invoices") @default(autoincrement())
+  invoice_number         String
+  invoice_date           DateTime                 @db.Timestamptz(6)
+  supplier_id            BigInt
+  total_amount           Decimal                  @db.Decimal
+  purchase_invoice_lines purchase_invoice_lines[]
+}
+
+model purchase_order_lines {
+  id                BigInt          @id @default(autoincrement())
+  purchase_order_id BigInt
+  item_id           BigInt
+  quantity          Decimal         @db.Decimal(18, 3)
+  unit_price        Decimal         @db.Decimal(18, 4)
+  discount_amount   Decimal         @db.Decimal(18, 2)
+  tax_amount        Decimal         @db.Decimal(18, 2)
+  line_total        Decimal?        @default(dbgenerated("(((quantity * unit_price) - discount_amount) + tax_amount)")) @db.Decimal(18, 2)
+  received_quantity Decimal         @db.Decimal(18, 3)
+  notes             String?
+  items             items           @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchase_orders   purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([item_id], map: "IX_purchase_order_lines_item_id")
+  @@index([purchase_order_id], map: "IX_purchase_order_lines_purchase_order_id")
+}
+
+model purchase_orders {
+  id                    BigInt                 @id @default(autoincrement())
+  company_id            BigInt
+  supplier_id           BigInt?
+  warehouse_id          BigInt
+  order_number          String                 @db.VarChar(50)
+  order_date            DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
+  expected_date         DateTime?              @db.Date
+  status                String                 @default("DRAFT") @db.VarChar(30)
+  subtotal              Decimal                @db.Decimal(18, 2)
+  discount_amount       Decimal                @db.Decimal(18, 2)
+  tax_amount            Decimal                @db.Decimal(18, 2)
+  total_amount          Decimal                @db.Decimal(18, 2)
+  notes                 String?
+  created_at            DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime               @default(now()) @db.Timestamptz(6)
+  created_by            BigInt?
+  CreatedByNavigationId BigInt?
+  purchase_order_lines  purchase_order_lines[]
+  users                 users?                 @relation(fields: [CreatedByNavigationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_purchase_orders_users_CreatedByNavigationId")
+  companies             companies              @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  suppliers             suppliers?             @relation(fields: [supplier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses            warehouses             @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([company_id, order_number])
+  @@index([CreatedByNavigationId], map: "IX_purchase_orders_CreatedByNavigationId")
+  @@index([supplier_id], map: "IX_purchase_orders_supplier_id")
+  @@index([warehouse_id], map: "IX_purchase_orders_warehouse_id")
+}
+
+model qc_inspections {
+  id                BigInt    @id @default(autoincrement())
+  receipt_id        BigInt?
+  purchase_order_id BigInt
+  supplier_id       BigInt
+  item_id           BigInt
+  batch_number      String    @db.VarChar(100)
+  qc_inspector_name String    @db.VarChar(150)
+  coa_number        String?   @db.VarChar(100)
+  qc_status         String    @default("Accepted") @db.VarChar(50)
+  received_quantity Decimal   @db.Decimal(14, 3)
+  accepted_quantity Decimal   @db.Decimal(14, 3)
+  rejected_quantity Decimal   @default(0) @db.Decimal(14, 3)
+  rejection_reason  String?
+  inspection_date   DateTime? @default(now()) @db.Timestamptz(6)
+  parameters_json   Json?
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model quality_inspections {
+  id                      BigInt                   @id @default(autoincrement())
+  company_id              BigInt
+  item_id                 BigInt
+  warehouse_id            BigInt?
+  production_order_id     BigInt?
+  production_stage_id     BigInt?
+  inspection_type         String                   @db.VarChar(30)
+  inspection_date         DateTime                 @default(now()) @db.Timestamptz(6)
+  quantity                Decimal                  @db.Decimal(18, 6)
+  status                  String                   @default("PENDING") @db.VarChar(30)
+  result                  String?
+  notes                   String?
+  created_at              DateTime                 @default(now()) @db.Timestamptz(6)
+  IsGmpPassed             Boolean
+  IsHaccpPassed           Boolean
+  IsWeightsPassed         Boolean
+  QualityScore            Decimal                  @db.Decimal(5, 2)
+  InspectorName           String?
+  companies               companies                @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "quality_company_fk")
+  items                   items                    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  production_orders       production_orders?       @relation(fields: [production_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  production_order_stages production_order_stages? @relation(fields: [production_stage_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses              warehouses?              @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([company_id], map: "IX_quality_inspections_company_id")
+  @@index([production_stage_id], map: "IX_quality_inspections_production_stage_id")
+  @@index([warehouse_id], map: "IX_quality_inspections_warehouse_id")
+  @@index([item_id], map: "idx_quality_item")
+  @@index([production_order_id], map: "idx_quality_production")
+}
+
+model recipe_lines {
+  id                         BigInt                       @id @default(autoincrement())
+  recipe_id                  BigInt
+  component_item_id          BigInt
+  line_number                Int
+  quantity                   Decimal                      @db.Decimal(18, 3)
+  unit                       String                       @db.VarChar(50)
+  waste_percentage           Decimal                      @db.Decimal(8, 3)
+  is_optional                Boolean
+  notes                      String?
+  created_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  stage_id                   BigInt?
+  production_stage_materials production_stage_materials[]
+  items                      items                        @relation(fields: [component_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipes                    recipes                      @relation(fields: [recipe_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  recipe_stages              recipe_stages?               @relation(fields: [stage_id], references: [id], onUpdate: NoAction, map: "recipe_lines_stage_fk")
+
+  @@unique([recipe_id, line_number])
+  @@index([component_item_id], map: "IX_recipe_lines_component_item_id")
+  @@index([stage_id], map: "idx_recipe_lines_stage")
+}
+
+model recipe_stages {
+  id                                             BigInt                    @id @default(autoincrement())
+  recipe_id                                      BigInt
+  stage_number                                   Int
+  stage_name                                     String                    @db.VarChar(200)
+  stage_recipe_id                                BigInt?
+  output_item_id                                 BigInt?
+  notes                                          String?
+  active                                         Boolean                   @default(true)
+  created_at                                     DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at                                     DateTime                  @default(now()) @db.Timestamptz(6)
+  production_order_stages                        production_order_stages[]
+  recipe_lines                                   recipe_lines[]
+  items                                          items?                    @relation(fields: [output_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipes_recipe_stages_recipe_idTorecipes       recipes                   @relation("recipe_stages_recipe_idTorecipes", fields: [recipe_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  recipes_recipe_stages_stage_recipe_idTorecipes recipes?                  @relation("recipe_stages_stage_recipe_idTorecipes", fields: [stage_recipe_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([recipe_id, stage_number])
+  @@index([output_item_id], map: "idx_recipe_stages_output_item")
+  @@index([recipe_id], map: "idx_recipe_stages_recipe")
+  @@index([stage_recipe_id], map: "idx_recipe_stages_stage_recipe")
+}
+
+model recipes {
+  id                                                   BigInt                     @id @default(autoincrement())
+  company_id                                           BigInt
+  product_item_id                                      BigInt
+  recipe_code                                          String                     @db.VarChar(50)
+  recipe_name                                          String                     @db.VarChar(250)
+  batch_quantity                                       Decimal                    @db.Decimal(18, 3)
+  batch_unit                                           String                     @db.VarChar(50)
+  yield_quantity                                       Decimal                    @db.Decimal(18, 3)
+  yield_unit                                           String                     @db.VarChar(50)
+  pieces_per_batch                                     Decimal?                   @db.Decimal(18, 3)
+  waste_percentage                                     Decimal                    @db.Decimal(8, 3)
+  preparation_time_minutes                             Int?
+  active                                               Boolean                    @default(true)
+  notes                                                String?
+  effective_from                                       DateTime                   @default(dbgenerated("CURRENT_DATE")) @db.Date
+  effective_to                                         DateTime?                  @db.Date
+  created_at                                           DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at                                           DateTime                   @default(now()) @db.Timestamptz(6)
+  production_order_details                             production_order_details[]
+  production_order_stages                              production_order_stages[]
+  production_orders                                    production_orders[]
+  recipe_lines                                         recipe_lines[]
+  recipe_stages_recipe_stages_recipe_idTorecipes       recipe_stages[]            @relation("recipe_stages_recipe_idTorecipes")
+  recipe_stages_recipe_stages_stage_recipe_idTorecipes recipe_stages[]            @relation("recipe_stages_stage_recipe_idTorecipes")
+  items                                                items                      @relation(fields: [product_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_recipes_items_product_item_id")
+  companies                                            companies                  @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([company_id, recipe_code])
+  @@index([product_item_id], map: "IX_recipes_product_item_id")
+}
+
+model refresh_tokens {
+  id                BigInt    @id @default(autoincrement())
+  user_id           BigInt
+  token             String    @unique(map: "ux_refresh_tokens_token") @db.VarChar(500)
+  expires_at        DateTime  @db.Timestamp(6)
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  revoked_at        DateTime? @db.Timestamp(6)
+  replaced_by_token String?   @db.VarChar(500)
+  revoked_reason    String?   @db.VarChar(100)
+  created_by_ip     String?   @db.VarChar(50)
+  users             users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "idx_refresh_tokens_expires_at")
+  @@index([user_id], map: "idx_refresh_tokens_user_id")
+}
+
+model roles {
+  id           BigInt    @id @default(autoincrement())
+  company_id   BigInt
+  role_name    String    @db.VarChar(100)
+  role_code    String    @db.VarChar(50)
+  active       Boolean   @default(true)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  display_name String?   @db.VarChar(100)
+  description  String?
+  permissions  String?
+  companies    companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "roles_company_fk")
+  users        users[]
+
+  @@unique([company_id, role_code])
+  @@index([company_id], map: "idx_roles_company")
+}
+
+model sales_invoice_lines {
+  id             BigInt         @id(map: "PK_sales_invoice_lines") @default(autoincrement())
+  invoice_id     BigInt
+  item_id        BigInt
+  quantity       Int
+  unit_price     Decimal        @db.Decimal
+  line_total     Decimal        @db.Decimal
+  created_at     DateTime?      @default(now()) @db.Timestamptz(6)
+  sales_invoices sales_invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_sales_invoice_lines_sales_invoices_sales_invoice_id")
+
+  @@index([invoice_id], map: "IX_sales_invoice_lines_sales_invoice_id")
+}
+
+model sales_invoices {
+  id                  BigInt                @id(map: "PK_sales_invoices") @default(autoincrement())
+  invoice_number      String
+  invoice_date        DateTime              @db.Timestamptz(6)
+  customer_id         BigInt
+  total_amount        Decimal               @db.Decimal
+  branch_id           BigInt?               @default(1)
+  company_id          BigInt?               @default(1)
+  created_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  sales_invoice_lines sales_invoice_lines[]
+  branches            branches?             @relation(fields: [branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_sales_invoices_company_id")
+}
+
+model sales_order_lines {
+  id                 BigInt       @id @default(autoincrement())
+  sales_order_id     BigInt
+  item_id            BigInt
+  quantity           Decimal      @db.Decimal(18, 6)
+  unit_price         Decimal      @db.Decimal(18, 2)
+  discount_amount    Decimal      @db.Decimal(18, 2)
+  tax_amount         Decimal      @db.Decimal(18, 2)
+  line_total         Decimal?     @db.Decimal(18, 2)
+  delivered_quantity Decimal      @db.Decimal(18, 6)
+  notes              String?
+  items              items        @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_lines_item_fk")
+  sales_orders       sales_orders @relation(fields: [sales_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_lines_order_fk")
+
+  @@index([item_id], map: "idx_sales_lines_item")
+  @@index([sales_order_id], map: "idx_sales_lines_order")
+}
+
+model sales_orders {
+  id                BigInt              @id @default(autoincrement())
+  company_id        BigInt
+  branch_id         BigInt?
+  customer_id       BigInt?
+  warehouse_id      BigInt
+  order_number      String              @db.VarChar(50)
+  order_date        DateTime            @default(dbgenerated("CURRENT_DATE")) @db.Date
+  status            String              @default("DRAFT") @db.VarChar(30)
+  subtotal          Decimal             @db.Decimal(18, 2)
+  discount_amount   Decimal             @db.Decimal(18, 2)
+  tax_amount        Decimal             @db.Decimal(18, 2)
+  total_amount      Decimal             @db.Decimal(18, 2)
+  notes             String?
+  slip_number       String?             @db.VarChar(50)
+  salesman_id       BigInt?
+  salesman_name     String?             @db.VarChar(100)
+  cashier_id        BigInt?
+  paid_at           DateTime?           @db.Timestamptz(6)
+  dispatcher_id     BigInt?
+  delivered_at      DateTime?           @db.Timestamptz(6)
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  sales_order_lines sales_order_lines[]
+  branches          branches?           @relation(fields: [branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_branch_fk")
+  companies         companies           @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_company_fk")
+  customers         customers?          @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_customer_fk")
+  warehouses        warehouses          @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_warehouse_fk")
+
+  @@unique([company_id, order_number])
+  @@index([branch_id], map: "IX_sales_orders_branch_id")
+  @@index([company_id], map: "idx_sales_orders_company")
+  @@index([customer_id], map: "idx_sales_orders_customer")
+  @@index([warehouse_id], map: "idx_sales_orders_warehouse")
+  @@index([slip_number], map: "idx_sales_orders_slip_number")
+}
+
+model shifts {
+  id              BigInt                  @id(map: "pk_shifts") @default(autoincrement())
+  company_id      BigInt
+  shift_name      String
+  start_time      Unsupported("interval")
+  end_time        Unsupported("interval")
+  employee_shifts employee_shifts[]
+}
+
+model stock_balances {
+  id                 BigInt     @id @default(autoincrement())
+  company_id         BigInt
+  warehouse_id       BigInt
+  item_id            BigInt
+  quantity           Decimal    @db.Decimal(18, 3)
+  reserved_quantity  Decimal    @db.Decimal(18, 3)
+  available_quantity Decimal?   @default(dbgenerated("(quantity - reserved_quantity)")) @db.Decimal(18, 3)
+  last_updated_at    DateTime   @default(now()) @db.Timestamptz(6)
+  companies          companies  @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items              items      @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses         warehouses @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([warehouse_id, item_id])
+  @@index([company_id], map: "idx_stock_balances_company")
+  @@index([item_id], map: "idx_stock_balances_item")
+  @@index([warehouse_id], map: "idx_stock_balances_warehouse")
+}
+
+model stock_movements {
+  id                    BigInt     @id @default(autoincrement())
+  company_id            BigInt
+  warehouse_id          BigInt
+  item_id               BigInt
+  movement_type         String     @db.VarChar(30)
+  quantity              Decimal    @db.Decimal(18, 3)
+  unit_cost             Decimal    @db.Decimal(18, 4)
+  reference_type        String?    @db.VarChar(50)
+  reference_id          BigInt?
+  notes                 String?
+  movement_at           DateTime   @default(now()) @db.Timestamptz(6)
+  created_at            DateTime   @default(now()) @db.Timestamptz(6)
+  created_by            BigInt?
+  CreatedByNavigationId BigInt?
+  users                 users?     @relation(fields: [CreatedByNavigationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_stock_movements_users_CreatedByNavigationId")
+  companies             companies  @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items                 items      @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses            warehouses @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([CreatedByNavigationId], map: "IX_stock_movements_CreatedByNavigationId")
+  @@index([company_id], map: "idx_stock_movements_company")
+  @@index([movement_at], map: "idx_stock_movements_date")
+  @@index([item_id], map: "idx_stock_movements_item")
+  @@index([reference_type, reference_id], map: "idx_stock_movements_reference")
+  @@index([warehouse_id], map: "idx_stock_movements_warehouse")
+}
+
+model stock_transfer_lines {
+  id                 BigInt          @id @default(autoincrement())
+  transfer_id        BigInt
+  item_id            BigInt
+  quantity           Decimal         @db.Decimal(18, 6)
+  received_quantity  Decimal         @db.Decimal(18, 6)
+  line_status        String          @default("PENDING") @db.VarChar(30)
+  discrepancy_reason String?
+  resolution_notes   String?
+  loss_qty           Decimal         @default(0) @db.Decimal(12, 3)
+  batch_number       String?         @db.VarChar(100)
+  expiry_date        DateTime?       @db.Timestamptz(6)
+  unit_cost          Decimal         @default(0) @db.Decimal(12, 2)
+  created_at         DateTime?       @default(now()) @db.Timestamptz(6)
+  items              items           @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "stock_transfer_lines_item_fk")
+  stock_transfers    stock_transfers @relation(fields: [transfer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "stock_transfer_lines_transfer_fk")
+
+  @@index([transfer_id], map: "IX_stock_transfer_lines_transfer_id")
+  @@index([item_id], map: "idx_stock_transfer_lines_item")
+}
+
+model stock_transfers {
+  id                                                       BigInt                 @id @default(autoincrement())
+  company_id                                               BigInt
+  from_warehouse_id                                        BigInt
+  to_warehouse_id                                          BigInt
+  transfer_number                                          String                 @db.VarChar(50)
+  transfer_date                                            DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
+  status                                                   String                 @default("DRAFT") @db.VarChar(30)
+  notes                                                    String?
+  created_at                                               DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                                               DateTime               @default(now()) @db.Timestamptz(6)
+  driver_name                                              String?                @db.VarChar(150)
+  vehicle_number                                           String?                @db.VarChar(50)
+  created_by                                               String?                @db.VarChar(100)
+  received_by                                              String?                @db.VarChar(100)
+  dispatched_at                                            DateTime?              @default(now()) @db.Timestamptz(6)
+  completed_at                                             DateTime?              @db.Timestamptz(6)
+  stock_transfer_lines                                     stock_transfer_lines[]
+  companies                                                companies              @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "stock_transfers_company_fk")
+  warehouses_stock_transfers_from_warehouse_idTowarehouses warehouses             @relation("stock_transfers_from_warehouse_idTowarehouses", fields: [from_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "stock_transfers_from_warehouse_fk")
+  warehouses_stock_transfers_to_warehouse_idTowarehouses   warehouses             @relation("stock_transfers_to_warehouse_idTowarehouses", fields: [to_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "stock_transfers_to_warehouse_fk")
+
+  @@unique([company_id, transfer_number])
+  @@index([from_warehouse_id], map: "idx_stock_transfers_from")
+  @@index([to_warehouse_id], map: "idx_stock_transfers_to")
+}
+
+model supplier_item_prices {
+  id             BigInt    @id @default(autoincrement())
+  supplier_id    BigInt
+  item_id        BigInt
+  price          Decimal   @default(0) @db.Decimal(18, 4)
+  currency       String    @default("EGP") @db.VarChar(10)
+  lead_time_days Int       @default(1)
+  effective_date DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  is_preferred   Boolean   @default(false)
+  notes          String?
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  items          items     @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  suppliers      suppliers @relation(fields: [supplier_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([supplier_id, item_id], map: "idx_supplier_item_prices_lookup")
+}
+
+model suppliers {
+  id                   BigInt                 @id @default(autoincrement())
+  company_id           BigInt
+  supplier_name        String                 @db.VarChar(200)
+  supplier_code        String                 @db.VarChar(50)
+  phone                String?                @db.VarChar(50)
+  email                String?                @db.VarChar(150)
+  address              String?
+  tax_number           String?                @db.VarChar(100)
+  payment_terms        String?                @db.VarChar(100)
+  credit_limit         Decimal                @db.Decimal(18, 2)
+  active               Boolean                @default(true)
+  notes                String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  is_approved          Boolean                @default(false)
+  purchase_orders      purchase_orders[]
+  supplier_item_prices supplier_item_prices[]
+  companies            companies              @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([company_id, supplier_code])
+  @@unique([company_id, supplier_code], map: "ux_suppliers_company_code")
+  @@index([company_id], map: "ix_suppliers_company_id")
+}
+
+model unit_conversions {
+  id                                         BigInt    @id @default(autoincrement())
+  company_id                                 BigInt
+  from_unit_id                               BigInt
+  to_unit_id                                 BigInt
+  conversion_factor                          Decimal   @db.Decimal(18, 6)
+  companies                                  companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "unit_conversions_company_fk")
+  units_unit_conversions_from_unit_idTounits units     @relation("unit_conversions_from_unit_idTounits", fields: [from_unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "unit_conversions_from_unit_fk")
+  units_unit_conversions_to_unit_idTounits   units     @relation("unit_conversions_to_unit_idTounits", fields: [to_unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "unit_conversions_to_unit_fk")
+
+  @@unique([company_id, from_unit_id, to_unit_id])
+  @@index([from_unit_id], map: "idx_unit_conversions_from")
+  @@index([to_unit_id], map: "idx_unit_conversions_to")
+}
+
+model units {
+  id                                                    BigInt             @id @default(autoincrement())
+  company_id                                            BigInt
+  unit_name                                             String             @db.VarChar(100)
+  unit_code                                             String             @db.VarChar(30)
+  active                                                Boolean            @default(true)
+  unit_conversions_unit_conversions_from_unit_idTounits unit_conversions[] @relation("unit_conversions_from_unit_idTounits")
+  unit_conversions_unit_conversions_to_unit_idTounits   unit_conversions[] @relation("unit_conversions_to_unit_idTounits")
+  companies                                             companies          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "units_company_fk")
+
+  @@unique([company_id, unit_code])
+  @@index([company_id], map: "idx_units_company")
+}
+
+model users {
+  id                                    BigInt            @id(map: "PK_users") @default(autoincrement())
+  username                              String
+  password_hash                         String
+  role                                  String
+  CompanyId                             BigInt?
+  RoleId                                BigInt?
+  full_name                             String?           @db.VarChar(150)
+  department_id                         BigInt?
+  department_name                       String?           @db.VarChar(100)
+  is_active                             Boolean           @default(true)
+  custom_permissions                    String?
+  company_id                            BigInt?           @default(1)
+  role_id                               BigInt?           @default(1)
+  employee_id                           BigInt?
+  employee_code                         String?           @db.VarChar(50)
+  purchase_orders                       purchase_orders[]
+  refresh_tokens                        refresh_tokens[]
+  stock_movements                       stock_movements[]
+  companies_users_CompanyIdTocompanies  companies?        @relation("users_CompanyIdTocompanies", fields: [CompanyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_users_companies_CompanyId")
+  roles                                 roles?            @relation(fields: [RoleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_users_roles_RoleId")
+  companies_users_company_idTocompanies companies?        @relation("users_company_idTocompanies", fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  waste_records                         waste_records[]
+
+  @@index([CompanyId], map: "IX_users_CompanyId")
+  @@index([RoleId], map: "IX_users_RoleId")
+}
+
+model warehouses {
+  id                                                                                     BigInt                       @id(map: "PK_warehouses") @default(autoincrement())
+  company_id                                                                             BigInt                       @default(1)
+  branch_id                                                                              BigInt?
+  warehouse_name                                                                         String
+  warehouse_code                                                                         String
+  warehouse_type                                                                         String
+  description                                                                            String?
+  active                                                                                 Boolean                      @default(true)
+  created_at                                                                             DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                                                                             DateTime?                    @db.Timestamptz(6)
+  parent_warehouse_id                                                                    BigInt?
+  is_active                                                                              Boolean?                     @default(true)
+  department_id                                                                          BigInt?
+  branch_transfers_branch_transfers_destination_warehouse_idTowarehouses                 branch_transfers[]           @relation("branch_transfers_destination_warehouse_idTowarehouses")
+  branch_transfers_branch_transfers_source_warehouse_idTowarehouses                      branch_transfers[]           @relation("branch_transfers_source_warehouse_idTowarehouses")
+  finished_goods_transfers_finished_goods_transfers_destination_warehouse_idTowarehouses finished_goods_transfers[]   @relation("finished_goods_transfers_destination_warehouse_idTowarehouses")
+  finished_goods_transfers_finished_goods_transfers_source_warehouse_idTowarehouses      finished_goods_transfers[]   @relation("finished_goods_transfers_source_warehouse_idTowarehouses")
+  material_requisition_lines                                                             material_requisition_lines[]
+  material_requisitions_material_requisitions_from_warehouse_idTowarehouses              material_requisitions[]      @relation("material_requisitions_from_warehouse_idTowarehouses")
+  material_requisitions_material_requisitions_to_warehouse_idTowarehouses                material_requisitions[]      @relation("material_requisitions_to_warehouse_idTowarehouses")
+  production_orders                                                                      production_orders[]
+  purchase_orders                                                                        purchase_orders[]
+  quality_inspections                                                                    quality_inspections[]
+  sales_orders                                                                           sales_orders[]
+  stock_balances                                                                         stock_balances[]
+  stock_movements                                                                        stock_movements[]
+  stock_transfers_stock_transfers_from_warehouse_idTowarehouses                          stock_transfers[]            @relation("stock_transfers_from_warehouse_idTowarehouses")
+  stock_transfers_stock_transfers_to_warehouse_idTowarehouses                            stock_transfers[]            @relation("stock_transfers_to_warehouse_idTowarehouses")
+  branches                                                                               branches?                    @relation(fields: [branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_warehouses_branches_branch_id")
+  companies                                                                              companies                    @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_warehouses_companies_company_id")
+  warehouses                                                                             warehouses?                  @relation("warehousesTowarehouses", fields: [parent_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_warehouses                                                                       warehouses[]                 @relation("warehousesTowarehouses")
+  waste_records                                                                          waste_records[]
+
+  @@index([branch_id], map: "IX_warehouses_branch_id")
+  @@index([company_id], map: "IX_warehouses_company_id")
+}
+
+model waste_records {
+  id                      BigInt                   @id @default(autoincrement())
+  company_id              BigInt
+  item_id                 BigInt
+  warehouse_id            BigInt?
+  production_order_id     BigInt?
+  production_stage_id     BigInt?
+  quantity                Decimal                  @db.Decimal(18, 6)
+  waste_reason            String                   @db.VarChar(150)
+  waste_date              DateTime                 @default(now()) @db.Timestamptz(6)
+  notes                   String?
+  created_at              DateTime                 @default(now()) @db.Timestamptz(6)
+  created_by              BigInt?
+  CreatedByNavigationId   BigInt?
+  users                   users?                   @relation(fields: [CreatedByNavigationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_waste_records_users_CreatedByNavigationId")
+  companies               companies                @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "waste_company_fk")
+  items                   items                    @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "waste_item_fk")
+  production_orders       production_orders?       @relation(fields: [production_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "waste_production_order_fk")
+  production_order_stages production_order_stages? @relation(fields: [production_stage_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "waste_production_stage_fk")
+  warehouses              warehouses?              @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([CreatedByNavigationId], map: "IX_waste_records_CreatedByNavigationId")
+  @@index([company_id], map: "IX_waste_records_company_id")
+  @@index([item_id], map: "IX_waste_records_item_id")
+  @@index([production_stage_id], map: "IX_waste_records_production_stage_id")
+  @@index([warehouse_id], map: "IX_waste_records_warehouse_id")
+  @@index([production_order_id], map: "idx_waste_production")
+}
