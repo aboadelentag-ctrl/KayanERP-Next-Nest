@@ -38,7 +38,7 @@ import FloorReworkView from './components/FloorReworkView';
 import ScrapLabReportView from './components/ScrapLabReportView';
 import PrintScrapReportModal from './components/PrintScrapReportModal';
 
-interface WarehouseLookup {
+export interface WarehouseLookup {
   id: string;
   warehouse_name: string;
   warehouse_code: string;
@@ -46,7 +46,7 @@ interface WarehouseLookup {
   department_id?: string | null;
 }
 
-interface ItemLookup {
+export interface ItemLookup {
   id: string;
   item_code: string;
   item_name: string;
@@ -145,6 +145,9 @@ export interface FinishedGoodsTransfer {
   costingDisputeStatus: string;
   costingDisputeReason?: string | null;
   costingDisputeChargeTo?: string | null;
+  costingDisputeNotes?: string | null;
+  costingDisputeResolvedBy?: string | null;
+  costingDisputeResolvedAt?: string | null;
   qcApprovedQty: number;
   qcSampleQty: number;
   qcReworkQty: number;
@@ -160,6 +163,9 @@ export interface FinishedGoodsTransfer {
   hasDispute: boolean;
   disputeReason?: string | null;
   disputeStatus: string;
+  disputeResolutionNotes?: string | null;
+  disputeResolvedBy?: string | null;
+  disputeResolvedAt?: string | null;
   controlDisputeChargeTo?: string | null;
   status: string;
   createdAt?: string;
