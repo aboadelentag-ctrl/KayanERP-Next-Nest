@@ -82,7 +82,7 @@ export default function PosShowroomHubPage() {
   }, [socket]);
 
   return (
-    <div dir="rtl" className="min-h-screen p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+    <div dir="rtl" className="erp-container-fluid min-h-screen space-y-4">
       
       {/* 1. الترويسة التنفيذية لمركز عمليات نقاط البيع */}
       <div className="erp-card p-6 rounded-3xl border shadow-sm relative overflow-hidden">

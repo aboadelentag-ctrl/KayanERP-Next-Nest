@@ -34,17 +34,208 @@ export class DynamicFormsService {
     }
   }
 
-  // 2. القوائم المنسدلة المرتبطة بالـ ERP
+  // 2. القوائم المنسدلة المرتبطة بالـ ERP مستخرجة حصرياً وبأكوادها وتفاصيلها من Neon DB
   async getErpLookup(source: string) {
-    switch (source) {
-      case 'production_lines':
-        return ['خط الحلويات الشرقية (البسبوسة والكنافة)', 'خط الحلويات الغربية والجاتوه', 'خط الشوكولاتة والتزيين', 'خط التعبئة والتغليف النهائي'];
-      case 'warehouses':
-        return ['مخزن الخامات الرئيسي', 'مخزن إنتاج تام - المعمل', 'مخزن مواد التعبئة والتغليف'];
-      case 'branches':
-        return ['معرض المنصورة', 'معرض دكرنس', 'معرض منية النصر', 'معرض شربين', 'معرض بلقاس', 'معرض الزقازيق', 'معرض السنبلاوين'];
-      default:
-        return ['قسم عام 1', 'قسم عام 2'];
+    try {
+      switch (source) {
+        case 'employees': {
+          const emp = await this.prisma.employees.findMany({
+            where: { active: true },
+            select: {
+              id: true,
+              employee_code: true,
+              employee_name: true,
+              job_titles: { select: { title_name: true } },
+              departments: { select: { department_name: true } },
+            },
+            orderBy: { employee_code: 'asc' },
+          });
+          return emp.map((e: any) => ({
+            id: String(e.id),
+            code: e.employee_code || `EMP-${e.id}`,
+            name: e.employee_name,
+            label: `[${e.employee_code || `EMP-${e.id}`}] ${e.employee_name}`,
+            extra: e.job_titles?.title_name || e.departments?.department_name || 'موظف',
+          }));
+        }
+
+        case 'items':
+        case 'products': {
+          const items = await this.prisma.items.findMany({
+            where: { active: true },
+            select: {
+              id: true,
+              item_code: true,
+              item_name: true,
+              item_type: true,
+              unit: true,
+              department_name: true,
+            },
+            orderBy: { item_code: 'asc' },
+          });
+          return items.map((i: any) => ({
+            id: String(i.id),
+            code: i.item_code || `ITM-${i.id}`,
+            name: i.item_name,
+            label: `[${i.item_code || `ITM-${i.id}`}] ${i.item_name}`,
+            extra: `${i.unit ? `${i.unit} • ` : ''}${i.item_type || 'صنف'}`,
+          }));
+        }
+
+        case 'raw_materials': {
+          const items = await this.prisma.items.findMany({
+            where: {
+              active: true,
+              item_type: { in: ['خامات', 'نصف مصنع', 'RAW', 'RAW_MATERIAL'] },
+            },
+            select: {
+              id: true,
+              item_code: true,
+              item_name: true,
+              item_type: true,
+              unit: true,
+            },
+            orderBy: { item_code: 'asc' },
+          });
+          return items.map((i: any) => ({
+            id: String(i.id),
+            code: i.item_code || `RAW-${i.id}`,
+            name: i.item_name,
+            label: `[${i.item_code || `RAW-${i.id}`}] ${i.item_name}`,
+            extra: `${i.unit ? `${i.unit} • ` : ''}${i.item_type || 'مادة خام'}`,
+          }));
+        }
+
+        case 'departments': {
+          const depts = await this.prisma.departments.findMany({
+            where: { active: true },
+            select: { id: true, department_code: true, department_name: true },
+            orderBy: { department_code: 'asc' },
+          });
+          return depts.map((d: any) => ({
+            id: String(d.id),
+            code: d.department_code || `D-${d.id}`,
+            name: d.department_name,
+            label: `[${d.department_code || `D-${d.id}`}] ${d.department_name}`,
+            extra: 'إدارة رئيسية',
+          }));
+        }
+
+        case 'production_lines': {
+          const lines = await this.prisma.departments.findMany({
+            where: { active: true, department_code: { gte: '300' } },
+            select: { id: true, department_code: true, department_name: true },
+            orderBy: { department_code: 'asc' },
+          });
+          return lines.map((l: any) => ({
+            id: String(l.id),
+            code: l.department_code || `LINE-${l.id}`,
+            name: l.department_name,
+            label: `[${l.department_code || `LINE-${l.id}`}] ${l.department_name}`,
+            extra: 'خط إنتاج',
+          }));
+        }
+
+        case 'shifts': {
+          return [
+            { id: 'shift_1', code: 'SH-01', name: 'الوردية الأولى (الصباحية)', label: '[SH-01] الوردية الأولى (الصباحية)', extra: '08:00 - 16:00' },
+            { id: 'shift_2', code: 'SH-02', name: 'الوردية الثانية (المسائية)', label: '[SH-02] الوردية الثانية (المسائية)', extra: '16:00 - 00:00' },
+            { id: 'shift_3', code: 'SH-03', name: 'الوردية الثالثة (الليلية)', label: '[SH-03] الوردية الثالثة (الليلية)', extra: '00:00 - 08:00' },
+          ];
+        }
+
+        case 'branches': {
+          const brs = await this.prisma.branches.findMany({
+            where: { active: true },
+            select: { id: true, branch_code: true, branch_name: true, address: true },
+            orderBy: { branch_code: 'asc' },
+          });
+          return brs.map((b: any) => ({
+            id: String(b.id),
+            code: b.branch_code || `BR-${b.id}`,
+            name: b.branch_name,
+            label: `[${b.branch_code || `BR-${b.id}`}] ${b.branch_name}`,
+            extra: b.address || 'فرع معتمد',
+          }));
+        }
+
+        case 'warehouses': {
+          const whs = await this.prisma.warehouses.findMany({
+            where: { active: true },
+            select: { id: true, warehouse_code: true, warehouse_name: true, warehouse_type: true },
+            orderBy: { warehouse_code: 'asc' },
+          });
+          return whs.map((w: any) => ({
+            id: String(w.id),
+            code: w.warehouse_code || `WH-${w.id}`,
+            name: w.warehouse_name,
+            label: `[${w.warehouse_code || `WH-${w.id}`}] ${w.warehouse_name}`,
+            extra: w.warehouse_type || 'مستودع',
+          }));
+        }
+
+        case 'customers': {
+          const cust = await this.prisma.customers.findMany({
+            where: { active: true },
+            select: { id: true, customer_code: true, customer_name: true, phone: true },
+            orderBy: { customer_code: 'asc' },
+          });
+          return cust.map((c: any) => ({
+            id: String(c.id),
+            code: c.customer_code || `CUST-${c.id}`,
+            name: c.customer_name,
+            label: `[${c.customer_code || `CUST-${c.id}`}] ${c.customer_name}`,
+            extra: c.phone || 'عميل تجاري',
+          }));
+        }
+
+        case 'suppliers': {
+          const supp = await this.prisma.suppliers.findMany({
+            where: { active: true },
+            select: { id: true, supplier_code: true, supplier_name: true, phone: true },
+            orderBy: { supplier_code: 'asc' },
+          });
+          return supp.map((s: any) => ({
+            id: String(s.id),
+            code: s.supplier_code || `SUP-${s.id}`,
+            name: s.supplier_name,
+            label: `[${s.supplier_code || `SUP-${s.id}`}] ${s.supplier_name}`,
+            extra: s.phone || 'مورد معتمد',
+          }));
+        }
+
+        case 'assets': {
+          const assets = await this.prisma.fixed_assets.findMany({
+            select: { id: true, asset_code: true, name: true, department: true },
+            orderBy: { asset_code: 'asc' },
+          });
+          return assets.map((a: any) => ({
+            id: String(a.id),
+            code: a.asset_code || `AST-${a.id}`,
+            name: a.name,
+            label: `[${a.asset_code || `AST-${a.id}`}] ${a.name}`,
+            extra: a.department || 'أصل ثابت',
+          }));
+        }
+
+        default: {
+          const items = await this.prisma.items.findMany({
+            where: { active: true },
+            select: { id: true, item_code: true, item_name: true },
+            take: 20,
+          });
+          return items.map((i: any) => ({
+            id: String(i.id),
+            code: i.item_code,
+            name: i.item_name,
+            label: `[${i.item_code}] ${i.item_name}`,
+            extra: 'صنف',
+          }));
+        }
+      }
+    } catch (err: any) {
+      console.error(`Error in getErpLookup(${source}):`, err.message);
+      return [];
     }
   }
 

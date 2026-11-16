@@ -20,8 +20,8 @@ export class ManufacturingController {
   }
 
   @Get('items')
-  async getItems() {
-    return await this.service.getProductionItems();
+  async getItems(@Query('departmentId') departmentId?: string) {
+    return await this.service.getProductionItems(departmentId);
   }
 
   @Get('orders')
@@ -65,5 +65,19 @@ export class ManufacturingController {
       throw new BadRequestException('معرف المرحلة وحالتها مطلوبان');
     }
     return await this.service.updateStageStatus(id, body);
+  }
+
+  @Get('reports/efficiency')
+  async getEfficiencyReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    return await this.service.getEfficiencyReport(startDate, endDate, departmentId);
+  }
+
+  @Get('productivity')
+  async getHourlyProductivity(@Query('department') department?: string) {
+    return await this.service.getHourlyProductivity(department);
   }
 }

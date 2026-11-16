@@ -129,4 +129,46 @@ export class AuthService {
       })),
     };
   }
+
+  // 4. استرجاع بيانات الملف الشخصي للمستخدم الحالي من قاعدة بيانات Neon
+  async getProfile(userId?: string) {
+    let dbUser: any = null;
+    if (userId && !isNaN(Number(userId))) {
+      dbUser = await this.prisma.users.findUnique({
+        where: { id: BigInt(userId) },
+        include: {
+          roles: true,
+          companies_users_company_idTocompanies: true,
+        },
+      });
+    }
+
+    if (!dbUser) {
+      dbUser = await this.prisma.users.findFirst({
+        include: {
+          roles: true,
+          companies_users_company_idTocompanies: true,
+        },
+      });
+    }
+
+    if (!dbUser) {
+      throw new NotFoundException('المستخدم غير موجود في قاعدة بيانات Neon');
+    }
+
+    const company = dbUser.companies_users_company_idTocompanies;
+    return {
+      success: true,
+      user: {
+        id: String(dbUser.id),
+        username: dbUser.username,
+        fullName: dbUser.full_name || dbUser.username,
+        role: dbUser.role || dbUser.roles?.role_code || 'SUPER_ADMIN',
+        companyId: String(dbUser.company_id || '1'),
+        companyName: company?.company_name || 'مصانع وحلواني أبو عادل (المركز الرئيسي)',
+        branchId: '1',
+        branchName: 'المصنع المركزي (سندوب)',
+      },
+    };
+  }
 }

@@ -2,6 +2,19 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeGateway } from '../realtime.gateway.js';
 
+export interface CreateSupplierDto {
+  supplier_name: string;
+  supplier_code?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  tax_number?: string;
+  payment_terms?: string;
+  credit_limit?: number;
+  notes?: string;
+  is_approved?: boolean;
+}
+
 export interface CreatePurchaseOrderItemDto {
   itemId: string | number;
   quantity: number;
@@ -43,99 +56,13 @@ export class ProcurementService {
     private readonly realtime: RealtimeGateway,
   ) {}
 
-  // 1. جلب قائمة الموردين المعتمدين (GET /procurement/suppliers)
+  // 1. جلب قائمة الموردين المعتمدين (GET /procurement/suppliers) مباشرة من Neon DB
   async getSuppliers() {
     try {
-      let list = await this.prisma.suppliers.findMany({
+      const list = await this.prisma.suppliers.findMany({
         where: { active: true },
         orderBy: { supplier_name: 'asc' },
       });
-
-      if (list.length === 0) {
-        const seedSuppliers = [
-          {
-            company_id: BigInt(1),
-            supplier_name: 'شركة الدلتا للسكر والصناعات التكاملية',
-            supplier_code: 'SUP-SGR-01',
-            phone: '0502314500',
-            email: 'sales@deltasugar.com.eg',
-            address: 'الحامول - كفر الشيخ / مكتب توزيع المنصورة',
-            tax_number: '100-245-891',
-            payment_terms: 'آجل 30 يوم',
-            credit_limit: 500000,
-            active: true,
-            is_approved: true,
-            notes: 'المورد المعتمد للسكر الأبيض المكرر شيكارة 50 كجم',
-          },
-          {
-            company_id: BigInt(1),
-            supplier_name: 'مزارع الهدى لإنتاج الألبان والسمن الفلاحي',
-            supplier_code: 'SUP-GHN-01',
-            phone: '01098877665',
-            email: 'huda.farms@dairy.eg',
-            address: 'طريق بلقاس الزراعي - الدقهلية',
-            tax_number: '230-891-443',
-            payment_terms: 'أسبوعي نقدي',
-            credit_limit: 350000,
-            active: true,
-            is_approved: true,
-            notes: 'توريد سمن بلدي جاموسي فلاحي 100% نخب أول',
-          },
-          {
-            company_id: BigInt(1),
-            supplier_name: 'مطاحن ومضارب شمال الدلتا',
-            supplier_code: 'SUP-FLR-01',
-            phone: '0502268112',
-            email: 'northdelta.mills@flour.com',
-            address: 'المنطقة الصناعية - جمصة',
-            tax_number: '310-776-551',
-            payment_terms: 'آجل 45 يوم',
-            credit_limit: 600000,
-            active: true,
-            is_approved: true,
-            notes: 'سميد بسبوسة فاخر ودقيق استخراج 72%',
-          },
-          {
-            company_id: BigInt(1),
-            supplier_name: 'العالمية لاستيراد المكسرات الفاخرة',
-            supplier_code: 'SUP-NUT-01',
-            phone: '0226998811',
-            email: 'import@globalnuts.eg',
-            address: 'ميناء دمياط / مخازن العبور',
-            tax_number: '450-112-998',
-            payment_terms: 'دفع 50% مقدم و 50% عند الاستلام',
-            credit_limit: 800000,
-            active: true,
-            is_approved: true,
-            notes: 'فستق حلبي أخضر تركي، كاجو هندي جامبو، وبندق مقشور',
-          },
-          {
-            company_id: BigInt(1),
-            supplier_name: 'شركة الأهرام للكرتون ومواد التعبئة',
-            supplier_code: 'SUP-PKG-01',
-            phone: '0502553311',
-            email: 'ahram.pack@packaging.eg',
-            address: 'المنطقة الصناعية الثانية - قويسنا',
-            tax_number: '560-334-119',
-            payment_terms: 'آجل 30 يوم',
-            credit_limit: 250000,
-            active: true,
-            is_approved: true,
-            notes: 'علب حلويات فاخرة، سلوفان غذائي، وأطباق تورت',
-          },
-        ];
-
-        for (const s of seedSuppliers) {
-          try {
-            await this.prisma.suppliers.create({ data: s });
-          } catch {}
-        }
-
-        list = await this.prisma.suppliers.findMany({
-          where: { active: true },
-          orderBy: { supplier_name: 'asc' },
-        });
-      }
 
       return {
         success: true,
@@ -150,6 +77,54 @@ export class ProcurementService {
       console.error('Error fetching suppliers:', err);
       return { success: false, data: [], message: err.message };
     }
+  }
+
+  // تسجيل مورد جديد (POST /procurement/suppliers)
+  async createSupplier(dto: CreateSupplierDto) {
+    if (!dto.supplier_name?.trim()) {
+      throw new BadRequestException('اسم المورد مطلوب');
+    }
+    const code = dto.supplier_code?.trim() || `SUP-${Date.now().toString().slice(-5)}`;
+    
+    // فحص عدم تكرار الكود
+    const existing = await this.prisma.suppliers.findFirst({
+      where: { company_id: BigInt(1), supplier_code: code },
+    });
+    const finalCode = existing ? `${code}-${Math.floor(10 + Math.random() * 90)}` : code;
+
+    const supplier = await this.prisma.suppliers.create({
+      data: {
+        company_id: BigInt(1),
+        supplier_name: dto.supplier_name.trim(),
+        supplier_code: finalCode,
+        phone: dto.phone?.trim() || null,
+        email: dto.email?.trim() || null,
+        address: dto.address?.trim() || null,
+        tax_number: dto.tax_number?.trim() || null,
+        payment_terms: dto.payment_terms?.trim() || 'آجل 30 يوم',
+        credit_limit: dto.credit_limit || 0,
+        notes: dto.notes?.trim() || null,
+        is_approved: dto.is_approved !== undefined ? dto.is_approved : true,
+        active: true,
+      },
+    });
+
+    this.realtime.emitEvent('supplier_created', {
+      supplierId: String(supplier.id),
+      supplierName: supplier.supplier_name,
+      supplierCode: supplier.supplier_code,
+    });
+
+    return {
+      success: true,
+      message: 'تم تسجيل المورد بنجاح في قاعدة البيانات',
+      data: {
+        ...supplier,
+        id: String(supplier.id),
+        company_id: String(supplier.company_id),
+        credit_limit: Number(supplier.credit_limit),
+      },
+    };
   }
 
   // 2. جلب قائمة أوامر الشراء وفواتير التوريد (GET /procurement/orders)

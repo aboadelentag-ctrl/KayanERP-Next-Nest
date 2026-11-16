@@ -232,7 +232,7 @@ export default function TreasuryVouchersPage() {
   };
 
   return (
-    <div dir="rtl" className="min-h-screen p-6 max-w-7xl mx-auto space-y-6">
+    <div dir="rtl" className="erp-container-fluid min-h-screen space-y-4">
       {/* Executive Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 erp-card p-6 rounded-2xl shadow-sm border print:hidden">
         <div>

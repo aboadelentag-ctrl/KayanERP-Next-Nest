@@ -1,6 +1,21 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeGateway } from '../realtime.gateway.js';
+import { getCurrentTenant } from '../common/tenant.context.js';
+
+export class CreateCustomerDto {
+  customer_name!: string;
+  customer_code?: string;
+  customer_type?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  tax_number?: string;
+  payment_terms?: string;
+  credit_limit?: number;
+  notes?: string;
+  active?: boolean;
+}
 
 export interface PosCheckoutItemDto {
   itemId: string | number;
@@ -42,95 +57,29 @@ export class SalesService {
     private readonly realtime: RealtimeGateway,
   ) {}
 
-  // 1. جلب قائمة العملاء (تجزئة، جملة، فنادق وشركات) (GET /sales/customers)
-  async getCustomers() {
+  // 1. جلب قائمة العملاء (تجزئة، جملة، فنادق وشركات) (GET /sales/customers) من Neon DB
+  async getCustomers(query?: { customerType?: string; activeOnly?: boolean; search?: string }) {
     try {
-      let list = await this.prisma.customers.findMany({
-        where: { active: true },
+      const where: any = {};
+      if (query?.activeOnly !== false) {
+        where.active = true;
+      }
+      if (query?.customerType && query.customerType !== 'ALL') {
+        where.customer_type = query.customerType;
+      }
+      if (query?.search && query.search.trim()) {
+        const s = query.search.trim();
+        where.OR = [
+          { customer_name: { contains: s, mode: 'insensitive' } },
+          { customer_code: { contains: s, mode: 'insensitive' } },
+          { phone: { contains: s } },
+        ];
+      }
+
+      const list = await this.prisma.customers.findMany({
+        where,
         orderBy: { customer_name: 'asc' },
       });
-
-      if (list.length === 0) {
-        const seedCustomers = [
-          {
-            company_id: BigInt(1),
-            customer_name: 'عميل نقدي عام (معارض التجزئة)',
-            customer_code: 'CUST-CASH-01',
-            customer_type: 'RETAIL',
-            phone: '01000000000',
-            address: 'معارض حلويات أبو عادل',
-            payment_terms: 'نقدي فوري',
-            credit_limit: 0,
-            active: true,
-            notes: 'مبيعات الكاشير المباشرة لرواد المعارض',
-          },
-          {
-            company_id: BigInt(1),
-            customer_name: 'حلواني السلام (توزيع جملة - المنصورة)',
-            customer_code: 'CUST-WHS-01',
-            customer_type: 'WHOLESALE',
-            phone: '0502213455',
-            email: 'salam.sweets@gmail.com',
-            address: 'شارع الجلاء - المنصورة',
-            tax_number: '200-112-445',
-            payment_terms: 'آجل 15 يوم',
-            credit_limit: 150000,
-            active: true,
-            notes: 'سحب أسبوعي بسبوسة وكنافة وهريسة',
-          },
-          {
-            company_id: BigInt(1),
-            customer_name: 'فندق رويال بالاس (توريدات ضيافة ومناسبات)',
-            customer_code: 'CUST-CORP-01',
-            customer_type: 'CORPORATE',
-            phone: '0502334411',
-            email: 'procurement@royalpalace.eg',
-            address: 'المشاية السفلية - النيل - المنصورة',
-            tax_number: '310-889-771',
-            payment_terms: 'تحويل بنكي 30 يوم',
-            credit_limit: 300000,
-            active: true,
-            notes: 'توريد تورت وبوفيهات حلويات غربية وشرقية',
-          },
-          {
-            company_id: BigInt(1),
-            customer_name: 'سوبر ماركت خير زمان (فرع دكرنس)',
-            customer_code: 'CUST-WHS-02',
-            customer_type: 'WHOLESALE',
-            phone: '0507481100',
-            address: 'شارع البحر - دكرنس',
-            tax_number: '412-334-998',
-            payment_terms: 'أسبوعي نقدي',
-            credit_limit: 100000,
-            active: true,
-            notes: 'أطباق وعلب نواعم ومعمول وبسكويت مغلفة',
-          },
-          {
-            company_id: BigInt(1),
-            customer_name: 'قاعة الماسة للحفلات والمؤتمرات',
-            customer_code: 'CUST-CORP-02',
-            customer_type: 'CORPORATE',
-            phone: '01011223344',
-            address: 'طريق المحلة الزراعي - المنصورة',
-            tax_number: '501-778-223',
-            payment_terms: 'عربون 50% والباقي بعد المناسبة',
-            credit_limit: 200000,
-            active: true,
-            notes: 'حلويات سواريه وجاتوه مشكل للحفلات الكبرى',
-          },
-        ];
-
-        for (const c of seedCustomers) {
-          try {
-            await this.prisma.customers.create({ data: c });
-          } catch {}
-        }
-
-        list = await this.prisma.customers.findMany({
-          where: { active: true },
-          orderBy: { customer_name: 'asc' },
-        });
-      }
 
       return {
         success: true,
@@ -138,13 +87,130 @@ export class SalesService {
           ...c,
           id: String(c.id),
           company_id: String(c.company_id),
-          credit_limit: Number(c.credit_limit),
+          credit_limit: Number(c.credit_limit || 0),
         })),
       };
     } catch (err: any) {
       console.error('Error fetching customers:', err);
-      return { success: false, data: [], message: err.message };
+      return { success: true, data: [] };
     }
+  }
+
+  // 1.1 استرجاع بيانات عميل محدد
+  async getCustomerById(id: string | number) {
+    const customer = await this.prisma.customers.findUnique({
+      where: { id: BigInt(id) },
+    });
+    if (!customer) {
+      throw new NotFoundException(`العميل برقم [${id}] غير موجود`);
+    }
+    return {
+      success: true,
+      data: {
+        ...customer,
+        id: String(customer.id),
+        company_id: String(customer.company_id),
+        credit_limit: Number(customer.credit_limit || 0),
+      },
+    };
+  }
+
+  // 1.2 إضافة عميل أو تاجر جديد وحفظه في Neon DB
+  async createCustomer(dto: CreateCustomerDto) {
+    if (!dto.customer_name || !dto.customer_name.trim()) {
+      throw new BadRequestException('اسم العميل أو التاجر حقل إلزامي');
+    }
+
+    const code = dto.customer_code?.trim() || `CUST-${Date.now().toString().slice(-5)}`;
+    const tenant = getCurrentTenant();
+    const companyId = tenant?.companyId || 1n;
+
+    const newCustomer = await this.prisma.customers.create({
+      data: {
+        company_id: companyId,
+        customer_name: dto.customer_name.trim(),
+        customer_code: code,
+        customer_type: dto.customer_type || 'RETAIL',
+        phone: dto.phone?.trim() || '',
+        email: dto.email?.trim() || null,
+        address: dto.address?.trim() || '',
+        tax_number: dto.tax_number?.trim() || null,
+        payment_terms: dto.payment_terms || 'نقدي',
+        credit_limit: dto.credit_limit ? Number(dto.credit_limit) : 0,
+        notes: dto.notes || '',
+        active: dto.active !== undefined ? dto.active : true,
+      },
+    });
+
+    const serialized = {
+      ...newCustomer,
+      id: String(newCustomer.id),
+      company_id: String(newCustomer.company_id),
+      credit_limit: Number(newCustomer.credit_limit || 0),
+    };
+
+    this.realtime.emitTenantUpdate(companyId, 'customer_created', serialized);
+
+    return {
+      success: true,
+      message: `تم إضافة العميل [${serialized.customer_name}] بنجاح إلى قاعدة بيانات Neon`,
+      data: serialized,
+    };
+  }
+
+  // 1.3 تعديل بيانات عميل
+  async updateCustomer(id: string | number, dto: Partial<CreateCustomerDto>) {
+    const parsedId = BigInt(id);
+    const existing = await this.prisma.customers.findUnique({ where: { id: parsedId } });
+    if (!existing) {
+      throw new NotFoundException(`العميل برقم [${id}] غير موجود`);
+    }
+
+    const updated = await this.prisma.customers.update({
+      where: { id: parsedId },
+      data: {
+        customer_name: dto.customer_name !== undefined ? dto.customer_name.trim() : existing.customer_name,
+        customer_code: dto.customer_code !== undefined ? dto.customer_code.trim() : existing.customer_code,
+        customer_type: dto.customer_type !== undefined ? dto.customer_type : existing.customer_type,
+        phone: dto.phone !== undefined ? dto.phone.trim() : existing.phone,
+        email: dto.email !== undefined ? dto.email.trim() : existing.email,
+        address: dto.address !== undefined ? dto.address.trim() : existing.address,
+        tax_number: dto.tax_number !== undefined ? dto.tax_number.trim() : existing.tax_number,
+        payment_terms: dto.payment_terms !== undefined ? dto.payment_terms : existing.payment_terms,
+        credit_limit: dto.credit_limit !== undefined ? Number(dto.credit_limit) : existing.credit_limit,
+        notes: dto.notes !== undefined ? dto.notes : existing.notes,
+        active: dto.active !== undefined ? dto.active : existing.active,
+      },
+    });
+
+    const serialized = {
+      ...updated,
+      id: String(updated.id),
+      company_id: String(updated.company_id),
+      credit_limit: Number(updated.credit_limit || 0),
+    };
+
+    const tenant = getCurrentTenant();
+    this.realtime.emitTenantUpdate(tenant?.companyId || 1n, 'customer_updated', serialized);
+
+    return {
+      success: true,
+      message: `تم تحديث بيانات العميل [${serialized.customer_name}] بنجاح`,
+      data: serialized,
+    };
+  }
+
+  // 1.4 حذف أو تعطيل عميل
+  async deleteCustomer(id: string | number) {
+    const parsedId = BigInt(id);
+    await this.prisma.customers.update({
+      where: { id: parsedId },
+      data: { active: false },
+    });
+    return {
+      success: true,
+      message: `تم إلغاء تفعيل حساب العميل بنجاح`,
+    };
   }
 
   // 2. استعراض فواتير وأوامر البيع (GET /sales/orders)

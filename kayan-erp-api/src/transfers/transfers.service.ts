@@ -52,36 +52,13 @@ export class TransfersService {
     private readonly realtime: RealtimeGateway,
   ) {}
 
-  // 1. جلب قائمة الفروع والمعارض المتاحة
+  // 1. جلب قائمة الفروع والمعارض المتاحة مباشرة من Neon DB
   async getBranches() {
     try {
-      let branchList = await this.prisma.branches.findMany({
+      const branchList = await this.prisma.branches.findMany({
         where: { active: true },
         orderBy: { branch_name: 'asc' },
       });
-
-      if (branchList.length === 0) {
-        const seedBranches = [
-          { company_id: BigInt(1), branch_name: 'معرض المنصورة الرئيسي (حي الجامعة)', branch_code: 'BR-MANS-01', phone: '0502200111', address: 'حي الجامعة - المنصورة' },
-          { company_id: BigInt(1), branch_name: 'معرض دكرنس المركزي', branch_code: 'BR-DKR-01', phone: '0507480222', address: 'شارع البحر - دكرنس' },
-          { company_id: BigInt(1), branch_name: 'معرض منية النصر', branch_code: 'BR-MNSR-01', phone: '0507200333', address: 'الشارع الرئيسي - منية النصر' },
-          { company_id: BigInt(1), branch_name: 'معرض شربين', branch_code: 'BR-SHRB-01', phone: '0507900444', address: 'ميدان المحطة - شربين' },
-          { company_id: BigInt(1), branch_name: 'معرض بلقاس', branch_code: 'BR-BLQ-01', phone: '0502500555', address: 'شارع التحرير - بلقاس' },
-          { company_id: BigInt(1), branch_name: 'معرض الزقازيق', branch_code: 'BR-ZGZ-01', phone: '0552300666', address: 'شارع القومية - الزقازيق' },
-          { company_id: BigInt(1), branch_name: 'معرض السنبلاوين', branch_code: 'BR-SNB-01', phone: '0506700777', address: 'شارع بورسعيد - السنبلاوين' },
-        ];
-
-        for (const b of seedBranches) {
-          try {
-            await this.prisma.branches.create({ data: b });
-          } catch {}
-        }
-
-        branchList = await this.prisma.branches.findMany({
-          where: { active: true },
-          orderBy: { branch_name: 'asc' },
-        });
-      }
 
       return {
         success: true,
@@ -97,32 +74,13 @@ export class TransfersService {
     }
   }
 
-  // 2. جلب قائمة المستودعات
+  // 2. جلب قائمة المستودعات مباشرة من Neon DB
   async getWarehouses() {
     try {
-      let warehouses = await this.prisma.warehouses.findMany({
+      const warehouses = await this.prisma.warehouses.findMany({
         where: { active: true },
         orderBy: { warehouse_name: 'asc' },
       });
-
-      if (warehouses.length === 0) {
-        const seedWarehouses = [
-          { company_id: BigInt(1), warehouse_name: 'مخزن إنتاج تام - المعمل الرئيسي', warehouse_code: 'WH-FG-MAIN', warehouse_type: 'FINISHED_GOODS' },
-          { company_id: BigInt(1), warehouse_name: 'مخزن الشحن والتوزيع للسيارات', warehouse_code: 'WH-LOG-01', warehouse_type: 'DISTRIBUTION' },
-          { company_id: BigInt(1), warehouse_name: 'مخزن خامات ومواد التعبئة', warehouse_code: 'WH-RAW-01', warehouse_type: 'RAW_MATERIALS' },
-        ];
-
-        for (const w of seedWarehouses) {
-          try {
-            await this.prisma.warehouses.create({ data: w });
-          } catch {}
-        }
-
-        warehouses = await this.prisma.warehouses.findMany({
-          where: { active: true },
-          orderBy: { warehouse_name: 'asc' },
-        });
-      }
 
       return {
         success: true,

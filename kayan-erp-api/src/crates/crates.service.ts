@@ -37,67 +37,12 @@ export class CratesService {
     private readonly realtime: RealtimeGateway,
   ) {}
 
-  // 1. جلب قائمة الأوعية والصناديق المتداولة وأرصدتها الإجمالية
+  // 1. جلب قائمة الأوعية والصناديق المتداولة وأرصدتها الإجمالية مباشرة من Neon DB
   async getContainers() {
     try {
-      let containers = await this.prisma.circulating_containers.findMany({
+      const containers = await this.prisma.circulating_containers.findMany({
         orderBy: { id: 'asc' },
       });
-
-      if (containers.length === 0) {
-        const seedContainers = [
-          {
-            container_name: 'سرفيس حلويات استيل (قياسي)',
-            specification: 'استيل غذائي 304 مقاوم للصدأ 60×40 سم للحلويات الشرقية',
-            total_factory_quantity: 1500,
-            in_production_floor_quantity: 400,
-            in_packaging_warehouse_quantity: 350,
-            with_drivers_and_branches_quantity: 700,
-            disputed_quantity: 30,
-            damaged_quantity: 20,
-          },
-          {
-            container_name: 'صندوق بلاستيك أحمر (نقل فروع)',
-            specification: 'بلاستيك مقوى يحمل 4 سرافيس استيل',
-            total_factory_quantity: 800,
-            in_production_floor_quantity: 150,
-            in_packaging_warehouse_quantity: 200,
-            with_drivers_and_branches_quantity: 430,
-            disputed_quantity: 12,
-            damaged_quantity: 8,
-          },
-          {
-            container_name: 'صندوق مبرد عازل (تورت وجاتوه)',
-            specification: 'فوم حراري عازل لتوزيع الحلويات الغربية والتورت',
-            total_factory_quantity: 300,
-            in_production_floor_quantity: 40,
-            in_packaging_warehouse_quantity: 60,
-            with_drivers_and_branches_quantity: 195,
-            disputed_quantity: 3,
-            damaged_quantity: 2,
-          },
-          {
-            container_name: 'صندوق خشبي تراثي (حلوى المولد)',
-            specification: 'خشب زان فاخر للمواسم والمعارض المركزية',
-            total_factory_quantity: 200,
-            in_production_floor_quantity: 10,
-            in_packaging_warehouse_quantity: 40,
-            with_drivers_and_branches_quantity: 150,
-            disputed_quantity: 0,
-            damaged_quantity: 0,
-          },
-        ];
-
-        for (const seed of seedContainers) {
-          try {
-            await this.prisma.circulating_containers.create({ data: seed });
-          } catch {}
-        }
-
-        containers = await this.prisma.circulating_containers.findMany({
-          orderBy: { id: 'asc' },
-        });
-      }
 
       return {
         success: true,

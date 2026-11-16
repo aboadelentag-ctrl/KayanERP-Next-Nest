@@ -69,4 +69,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
     this.emitTenantUpdate(tenantId, event, data);
   }
+
+  /**
+   * دالة مريحة للبث العام لجميع الأحداث
+   */
+  emitEvent(event: string, data: any) {
+    this.emitUpdate(event, data);
+  }
 }

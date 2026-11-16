@@ -24,13 +24,17 @@ export class CompaniesController {
       }
     }
     const currentTenant = getCurrentTenant();
-    if (currentTenant?.isPlatformAdmin || currentTenant?.role === 'SUPER_ADMIN') {
+    if (
+      currentTenant?.isPlatformAdmin ||
+      currentTenant?.role === 'PLATFORM_SUPER_ADMIN' ||
+      currentTenant?.role === 'SUPER_ADMIN'
+    ) {
       return true;
     }
     return role === 'SUPER_ADMIN' || role === 'PLATFORM_SUPER_ADMIN';
   }
 
-  // 1. جلب الشركات مع تطبيق العزل الصارم للمستأجرين
+  // 1. جلب الشركات: مقصور حصراً على سوبر أدمن المنصة لحماية خصوصية المستأجرين
   @Get()
   async findAll(
     @Headers('x-user-role') role?: string,
@@ -38,15 +42,15 @@ export class CompaniesController {
     @Headers('authorization') authHeader?: string,
   ) {
     const isSuperAdmin = this.checkSuperAdmin(role, authHeader);
-    const tenant = getCurrentTenant();
-    const effectiveCompanyId = companyId || tenant?.tenantId;
-
-    if (!isSuperAdmin && effectiveCompanyId) {
-      // للمستخدم العادي: إرجاع شركته فقط
-      return this.companiesService.findAll('USER', effectiveCompanyId);
+    if (!isSuperAdmin) {
+      throw new ForbiddenException(
+        'عفواً، استعراض وإدارة سجلات المنشآت المستأجرة مقصور حصرياً على رتبة «سوبر أدمن المنصة» (Multi-Tenant Protection - 403 Forbidden).',
+      );
     }
 
-    return this.companiesService.findAll(isSuperAdmin ? 'SUPER_ADMIN' : 'USER', effectiveCompanyId);
+    const tenant = getCurrentTenant();
+    const effectiveCompanyId = companyId || tenant?.tenantId;
+    return this.companiesService.findAll('SUPER_ADMIN', effectiveCompanyId);
   }
 
   // 2. جلب شركة محددة مع منع الوصول لشركات الغير

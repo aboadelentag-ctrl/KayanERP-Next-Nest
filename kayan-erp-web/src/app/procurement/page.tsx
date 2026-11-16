@@ -39,8 +39,10 @@ interface Supplier {
   phone?: string;
   email?: string;
   address?: string;
+  tax_number?: string;
   payment_terms?: string;
   credit_limit?: number;
+  notes?: string;
   is_approved: boolean;
 }
 
@@ -109,9 +111,26 @@ export default function ProcurementManagementPage() {
   const [feedback, setFeedback] = useState<{ msg: string; success: boolean } | null>(null);
   const [reportDate, setReportDate] = useState<string>('2026-10-30');
 
+  // التبويب النشط: أوامر الشراء أو دليل الموردين أو محاضر الاستلام
+  const [activeTab, setActiveTab] = useState<'ORDERS' | 'SUPPLIERS' | 'GRN'>('ORDERS');
+
   // التصفية والبحث
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState<string>('');
+
+  // نافذة تسجيل مورد جديد
+  const [showCreateSupplierModal, setShowCreateSupplierModal] = useState<boolean>(false);
+  const [newSupplierName, setNewSupplierName] = useState<string>('');
+  const [newSupplierCode, setNewSupplierCode] = useState<string>('');
+  const [newSupplierPhone, setNewSupplierPhone] = useState<string>('');
+  const [newSupplierEmail, setNewSupplierEmail] = useState<string>('');
+  const [newSupplierAddress, setNewSupplierAddress] = useState<string>('');
+  const [newSupplierTaxNumber, setNewSupplierTaxNumber] = useState<string>('');
+  const [newSupplierPaymentTerms, setNewSupplierPaymentTerms] = useState<string>('آجل 30 يوم');
+  const [newSupplierCreditLimit, setNewSupplierCreditLimit] = useState<number>(50000);
+  const [newSupplierNotes, setNewSupplierNotes] = useState<string>('');
+  const [isSubmittingSupplier, setIsSubmittingSupplier] = useState<boolean>(false);
 
   // نافذة إدراج أمر شراء وتوريد جديد
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -219,6 +238,58 @@ export default function ProcurementManagementPage() {
     setIsRefreshing(true);
     await Promise.all([fetchOrders(), fetchSuppliers(), fetchRawMaterials()]);
     setIsRefreshing(false);
+  };
+
+  // فتح وإعداد نافذة تسجيل مورد جديد
+  const initNewSupplier = () => {
+    setNewSupplierName('');
+    setNewSupplierCode(`SUP-${Math.floor(1000 + Math.random() * 9000)}`);
+    setNewSupplierPhone('');
+    setNewSupplierEmail('');
+    setNewSupplierAddress('');
+    setNewSupplierTaxNumber('');
+    setNewSupplierPaymentTerms('آجل 30 يوم');
+    setNewSupplierCreditLimit(50000);
+    setNewSupplierNotes('');
+    setShowCreateSupplierModal(true);
+    setFeedback(null);
+  };
+
+  // إرسال تسجيل مورد جديد إلى قاعدة البيانات
+  const submitCreateSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSupplierName.trim()) {
+      setFeedback({ msg: 'يرجى إدخال اسم المورد أو الشركة الموردة', success: false });
+      return;
+    }
+
+    setIsSubmittingSupplier(true);
+    setFeedback(null);
+
+    try {
+      const res = await axios.post('http://localhost:3000/procurement/suppliers', {
+        supplier_name: newSupplierName.trim(),
+        supplier_code: newSupplierCode.trim(),
+        phone: newSupplierPhone.trim(),
+        email: newSupplierEmail.trim(),
+        address: newSupplierAddress.trim(),
+        tax_number: newSupplierTaxNumber.trim(),
+        payment_terms: newSupplierPaymentTerms,
+        credit_limit: Number(newSupplierCreditLimit),
+        notes: newSupplierNotes.trim(),
+        is_approved: true,
+      });
+
+      if (res.data?.success) {
+        setFeedback({ msg: `✅ تم تسجيل المورد (${newSupplierName}) بنجاح في قاعدة البيانات`, success: true });
+        setShowCreateSupplierModal(false);
+        fetchSuppliers();
+      }
+    } catch (err: any) {
+      setFeedback({ msg: err.response?.data?.message || 'تعذر تسجيل المورد', success: false });
+    } finally {
+      setIsSubmittingSupplier(false);
+    }
   };
 
   // فتح وإعداد نافذة أمر شراء جديد
@@ -394,14 +465,28 @@ export default function ProcurementManagementPage() {
     });
   }, [orders, statusFilter, searchQuery]);
 
+  const filteredSuppliers = useMemo(() => {
+    return suppliers.filter((s) => {
+      const q = supplierSearchQuery.toLowerCase().trim();
+      return (
+        q === '' ||
+        s.supplier_name.toLowerCase().includes(q) ||
+        s.supplier_code.toLowerCase().includes(q) ||
+        (s.phone && s.phone.includes(q)) ||
+        (s.address && s.address.toLowerCase().includes(q)) ||
+        (s.tax_number && s.tax_number.includes(q))
+      );
+    });
+  }, [suppliers, supplierSearchQuery]);
+
   return (
     <div
-      className={`min-h-screen p-4 md:p-8 text-right transition-colors duration-200 ${
+      className={`min-h-screen text-right transition-colors duration-200 ${
         theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
       }`}
       dir="rtl"
     >
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="erp-container-fluid space-y-4">
 
         {/* 1. الترويسة الرئيسية وأزرار التنقل */}
         <header
@@ -415,13 +500,13 @@ export default function ProcurementManagementPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
-                إدارة المشتريات وفحص الخامات الموردة
+                إدارة المشتريات والموردين وفحص الخامات
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono">
-                  Procurement & QC Hub
+                  Procurement & Suppliers Hub
                 </span>
               </h1>
               <p className="text-sm erp-muted mt-0.5">
-                أوامر التوريد، محاضر فحص الجودة المعملية، وتغذية أرصدة الخامات لمصانع «أبو عادل»
+                دليل الموردين المعتمدين، أوامر وفواتير الشراء، ومحاضر فحص الجودة المعملية (GRN) لمصانع «أبو عادل»
               </p>
             </div>
           </div>
@@ -434,29 +519,14 @@ export default function ProcurementManagementPage() {
               الرئيسية
             </Link>
 
-            <Link
-              href="/production"
-              className="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow"
+            <button
+              type="button"
+              onClick={initNewSupplier}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
             >
-              <Factory className="w-4 h-4" />
-              صالة الإنتاج
-            </Link>
-
-            <Link
-              href="/costing"
-              className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow"
-            >
-              <Calculator className="w-4 h-4" />
-              التكاليف والتسعير
-            </Link>
-
-            <Link
-              href="/crates"
-              className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow"
-            >
-              <Boxes className="w-4 h-4" />
-              الصناديق
-            </Link>
+              <Building2 className="w-4 h-4" />
+              تسجيل مورد جديد
+            </button>
 
             <button
               type="button"
@@ -584,46 +654,216 @@ export default function ProcurementManagementPage() {
           </div>
         </div>
 
-        {/* 3. شريط التصفية والبحث */}
-        <div
-          className={`p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row justify-between items-center gap-3 ${
-            theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}
-        >
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {[
-              { id: 'ALL', label: 'كافة أوامر الشراء' },
-              { id: 'APPROVED', label: 'معتمد قيد التوريد' },
-              { id: 'RECEIVED', label: 'مستلم ومفحوص معملياً' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStatusFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
-                  statusFilter === tab.id
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow'
-                    : 'bg-slate-800/60 text-slate-300 border-slate-700 hover:border-emerald-500'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        {/* شريط التبويبات الرئيسي (المشتريات والموردين) */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800/80 pb-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab('ORDERS')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${
+              activeTab === 'ORDERS'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20'
+                : 'erp-sub hover:opacity-80'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>أوامر وفواتير الشراء</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-900/40 text-white font-mono">
+              {orders.length}
+            </span>
+          </button>
 
-          <div className="relative w-full md:w-72">
-            <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
-            <input
-              type="text"
-              placeholder="بحث برقم الأمر أو اسم المورد..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pr-9 pl-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-black'
-              }`}
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('SUPPLIERS')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${
+              activeTab === 'SUPPLIERS'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/20'
+                : 'erp-sub hover:opacity-80'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>دليل وحسابات الموردين المعتمدين</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-900/40 text-white font-mono">
+              {suppliers.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('GRN');
+              setStatusFilter('RECEIVED');
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer border ${
+              activeTab === 'GRN'
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                : 'erp-sub hover:opacity-80'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>فحص واستلام الخامات (GRN)</span>
+          </button>
         </div>
+
+        {/* عرض دليل الموردين عندما يكون التبويب النشط هو الموردين */}
+        {activeTab === 'SUPPLIERS' ? (
+          <div className="space-y-4">
+            <div
+              className={`p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row justify-between items-center gap-3 ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">سجل وبيانات الموردين المعتمدين لمصانع وحلواني أبو عادل</h3>
+                  <p className="text-xs erp-muted">الشركات والجهات المعتمدة لتوريد السكر، الدقيق، السمن، المكسرات وخامات التعبئة</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="relative w-full md:w-72">
+                  <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="بحث باسم المورد، الكود، أو الهاتف..."
+                    value={supplierSearchQuery}
+                    onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                    className={`w-full pr-9 pl-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-black'
+                    }`}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={initNewSupplier}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" />
+                  تسجيل مورد جديد
+                </button>
+              </div>
+            </div>
+
+            {/* جدول الموردين */}
+            <div
+              className={`rounded-2xl border shadow-sm overflow-hidden ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+              }`}
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead className={theme === 'dark' ? 'bg-slate-800/60 text-slate-400' : 'bg-slate-100 text-slate-600'}>
+                    <tr>
+                      <th className="p-3 font-bold">كود المورد</th>
+                      <th className="p-3 font-bold">اسم المورد / الشركة</th>
+                      <th className="p-3 font-bold">الهاتف والبريد</th>
+                      <th className="p-3 font-bold">العنوان</th>
+                      <th className="p-3 font-bold">البطاقة الضريبية</th>
+                      <th className="p-3 font-bold">شروط السداد</th>
+                      <th className="p-3 font-bold text-center">الحد الائتماني</th>
+                      <th className="p-3 font-bold text-center">حالة الاعتماد</th>
+                      <th className="p-3 font-bold text-center">إجراء سريع</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/40 font-medium">
+                    {filteredSuppliers.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-8 text-center text-slate-500">
+                          لا توجد نتائج مطابقة لبحث الموردين
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSuppliers.map((sup) => (
+                        <tr key={sup.id} className="hover:bg-slate-800/30 transition">
+                          <td className="p-3 font-mono font-bold text-blue-400">{sup.supplier_code}</td>
+                          <td className="p-3 font-bold text-sm text-slate-100">{sup.supplier_name}</td>
+                          <td className="p-3 text-slate-300">
+                            <div>{sup.phone || '-'}</div>
+                            {sup.email && <div className="text-[10px] text-slate-500">{sup.email}</div>}
+                          </td>
+                          <td className="p-3 text-slate-400 max-w-[200px] truncate">{sup.address || '-'}</td>
+                          <td className="p-3 font-mono text-slate-400">{sup.tax_number || '-'}</td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-semibold border border-slate-700">
+                              {sup.payment_terms || 'آجل 30 يوم'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-emerald-400">
+                            {sup.credit_limit ? `${Number(sup.credit_limit).toLocaleString('ar-EG')} ج.م` : '-'}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              ✓ معتمد
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSupplierId(String(sup.id));
+                                setActiveTab('ORDERS');
+                                initNewOrder();
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 font-bold transition text-xs flex items-center gap-1 mx-auto cursor-pointer"
+                            >
+                              <ShoppingBag className="w-3.5 h-3.5" />
+                              <span>إصدار أمر شراء</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* 3. شريط التصفية والبحث */}
+            <div
+              className={`p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row justify-between items-center gap-3 ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                {[
+                  { id: 'ALL', label: 'كافة أوامر الشراء' },
+                  { id: 'APPROVED', label: 'معتمد قيد التوريد' },
+                  { id: 'RECEIVED', label: 'مستلم ومفحوص معملياً' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setStatusFilter(tab.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                      statusFilter === tab.id
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow'
+                        : 'bg-slate-800/60 text-slate-300 border-slate-700 hover:border-emerald-500'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full md:w-72">
+                <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="بحث برقم الأمر أو اسم المورد..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full pr-9 pl-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-black'
+                  }`}
+                />
+              </div>
+            </div>
 
         {/* 4. جدول أوامر الشراء وفواتير التوريد */}
         <div
@@ -733,6 +973,178 @@ export default function ProcurementManagementPage() {
             </div>
           )}
         </div>
+        </>
+        )}
+
+        {/* نافذة تسجيل مورد معتمد جديد */}
+        {showCreateSupplierModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 overflow-y-auto">
+            <div
+              className={`w-full max-w-xl rounded-2xl border shadow-2xl p-6 space-y-4 my-8 ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              <div className="flex justify-between items-center border-b pb-3 erp-card">
+                <div className="flex items-center gap-2 text-blue-500 font-bold">
+                  <Building2 className="w-5 h-5" />
+                  <h3 className="text-base">تسجيل مورد معتمد جديد في منظومة كيان ERP</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateSupplierModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={submitCreateSupplier} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold mb-1">
+                      اسم المورد / الشركة <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="مثال: شركة الدلتا للسكر وتوريد الخامات"
+                      value={newSupplierName}
+                      onChange={(e) => setNewSupplierName(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold mb-1">كود المورد المعياري</label>
+                    <input
+                      type="text"
+                      value={newSupplierCode}
+                      onChange={(e) => setNewSupplierCode(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border font-mono text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-blue-400' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold mb-1">رقم الهاتف / مسؤول التوريد</label>
+                    <input
+                      type="text"
+                      placeholder="010XXXXXXXX"
+                      value={newSupplierPhone}
+                      onChange={(e) => setNewSupplierPhone(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border font-mono text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold mb-1">البريد الإلكتروني</label>
+                    <input
+                      type="email"
+                      placeholder="supplier@company.com"
+                      value={newSupplierEmail}
+                      onChange={(e) => setNewSupplierEmail(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border font-mono text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold mb-1">البطاقة الضريبية / السجل</label>
+                    <input
+                      type="text"
+                      placeholder="999-888-777"
+                      value={newSupplierTaxNumber}
+                      onChange={(e) => setNewSupplierTaxNumber(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border font-mono text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold mb-1">شروط السداد والدفع</label>
+                    <select
+                      value={newSupplierPaymentTerms}
+                      onChange={(e) => setNewSupplierPaymentTerms(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    >
+                      <option value="آجل 30 يوم">آجل 30 يوم</option>
+                      <option value="آجل 15 يوم">آجل 15 يوم</option>
+                      <option value="نقدي عند الاستلام">نقدي عند الاستلام والفحص</option>
+                      <option value="دفعة مقدمة 50%">دفعة مقدمة 50% والباقي عند التوريد</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold mb-1">الحد الائتماني المسموح به (ج.م)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5000"
+                      value={newSupplierCreditLimit}
+                      onChange={(e) => setNewSupplierCreditLimit(Number(e.target.value))}
+                      className={`w-full p-2.5 rounded-xl border font-mono font-bold text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-emerald-400' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold mb-1">العنوان / مستودعات المورد</label>
+                    <input
+                      type="text"
+                      placeholder="المنطقة الصناعية، العاشر من رمضان..."
+                      value={newSupplierAddress}
+                      onChange={(e) => setNewSupplierAddress(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold mb-1">ملاحظات والتصنيفات التوريدية</label>
+                    <input
+                      type="text"
+                      placeholder="مورد خامات رئيسية، معتمد بشهادة صحية ومطابقة الهيئة القومية لسلامة الغذاء"
+                      value={newSupplierNotes}
+                      onChange={(e) => setNewSupplierNotes(e.target.value)}
+                      className={`w-full p-2.5 rounded-xl border text-xs ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t erp-card">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateSupplierModal(false)}
+                    className="px-5 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingSupplier}
+                    className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingSupplier ? <Loader2 className="w-4 h-4 animate-spin" /> : <Building2 className="w-4 h-4" />}
+                    حفظ واعتماد المورد
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* 5. نافذة إدراج أمر شراء وتوريد جديد (Create Purchase Order Modal) */}
         {showCreateModal && (

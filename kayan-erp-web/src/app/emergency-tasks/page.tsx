@@ -229,8 +229,8 @@ export default function EmergencyTasksPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-200" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-200" dir="rtl">
+      <div className="erp-container-fluid space-y-4">
 
         {/* الترويسة */}
         <header className="erp-card p-5 rounded-2xl shadow-sm border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors duration-200 print:hidden">
@@ -242,20 +242,41 @@ export default function EmergencyTasksPage() {
               <Flame className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-black">غرفة بلاغات الطوارئ والأعطال (SOS & SLA)</h1>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-500/10 text-rose-500 border border-rose-500/30">
+                  غرفة العمليات المركزية والتدخل السريع SOS
+                </span>
+                <span className="text-xs erp-muted font-mono">SLA • Downtime Tracking</span>
+              </div>
+              <h1 className="text-xl md:text-2xl font-black">شاشة الأوامر الطارئة وبلاغات التدخل السريع</h1>
               <p className="text-xs erp-muted">
-                مصانع وحلواني أبو عادل | الاستجابة السريعة لأعطال الماكينات وخطوط الإنتاج وتتبع زمن التوقف
+                إصدار ومتابعة أوامر التشغيل الحرجة، بلاغات توقف الماكينات وخطوط الإنتاج، وتكليف الفنيين الفوري لمصانع «أبو عادل»
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/"
+              className="px-3.5 py-2 rounded-xl border erp-sub hover:opacity-80 transition font-bold text-xs"
+            >
+              الرئيسية
+            </Link>
+
+            <Link
+              href="/mes/shop-floor"
+              className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow transition"
+            >
+              <Layers className="w-4 h-4" />
+              <span>صالة الإنتاج MES</span>
+            </Link>
+
             <button
               onClick={() => setShowCreateModal(true)}
               className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer"
             >
               <AlertTriangle className="w-4 h-4" />
-              <span>إطلاق بلاغ طارئ (SOS)</span>
+              <span>إصدار أمر / بلاغ طارئ (SOS)</span>
             </button>
 
             <button

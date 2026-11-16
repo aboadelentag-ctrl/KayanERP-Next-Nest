@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeGateway } from '../realtime.gateway.js';
+import { getCurrentTenant } from '../common/tenant.context.js';
 
 export class CreateTreasuryVoucherDto {
   voucherType: 'RECEIPT' | 'PAYMENT';
@@ -18,116 +19,102 @@ export class CreateTreasuryVoucherDto {
 
 @Injectable()
 export class TreasuryService {
-  private vouchers: any[] = [
-    {
-      id: '1',
-      voucherNumber: 'RV-2026-00101',
-      voucherType: 'RECEIPT',
-      voucherDate: new Date(Date.now() - 3600000 * 2).toISOString(),
-      amount: 45000,
-      treasuryName: 'خزينة المبيعات - المصنع المركزي',
-      partyName: 'معرض حلواني الصباح - المعادي',
-      branchName: 'المصنع المركزي (سندوب)',
-      branchId: '1',
-      paymentMethod: 'CASH',
-      notes: 'تحصيل دفعة توريدات تورت وحلويات شرقية عن شهر أكتوبر',
-      status: 'POSTED',
-      accountCode: '110101',
-      accountName: 'الصندوق والخزينة المركزية',
-    },
-    {
-      id: '2',
-      voucherNumber: 'PV-2026-00085',
-      voucherType: 'PAYMENT',
-      voucherDate: new Date(Date.now() - 3600000 * 5).toISOString(),
-      amount: 18500,
-      treasuryName: 'الخزينة الرئيسية - الإدارة المالية',
-      partyName: 'شركة الدلتا لتجارة وتكرير السكر',
-      branchName: 'المصنع المركزي (سندوب)',
-      branchId: '1',
-      paymentMethod: 'BANK_TRANSFER',
-      notes: 'سداد دفعة نقدية عاجلة لفاتورة سكر أبيض مكرر توريد اليوم',
-      status: 'POSTED',
-      accountCode: '210101',
-      accountName: 'موردو الخامات والسلع',
-    },
-    {
-      id: '3',
-      voucherNumber: 'RV-2026-00102',
-      voucherType: 'RECEIPT',
-      voucherDate: new Date(Date.now() - 3600000 * 8).toISOString(),
-      amount: 32000,
-      treasuryName: 'خزينة معرض المنصورة الرئيسي',
-      partyName: 'عملاء المعرض - إيراد الوردية الأولى',
-      branchName: 'معرض المنصورة الرئيسي',
-      branchId: '4',
-      paymentMethod: 'POS_VISA',
-      notes: 'توريد إيراد مبيعات التجزئة الصباحية لنقاط البيع',
-      status: 'POSTED',
-      accountCode: '110102',
-      accountName: 'خزينة معرض المنصورة',
-    },
-    {
-      id: '4',
-      voucherNumber: 'PV-2026-00086',
-      voucherType: 'PAYMENT',
-      voucherDate: new Date(Date.now() - 3600000 * 12).toISOString(),
-      amount: 4200,
-      treasuryName: 'خزينة العهد والمصروفات النثرية',
-      partyName: 'إدارة الحركة والنقل - سولار سيارات التوزيع',
-      branchName: 'أسطول التوزيع المركزي',
-      branchId: '1',
-      paymentMethod: 'CASH',
-      notes: 'تموين 4 سيارات توزيع مبرد بالسولار لتوزيع خط المحلة والمنصورة',
-      status: 'POSTED',
-      accountCode: '510204',
-      accountName: 'مصاريف وقود ومحروقات التوزيع',
-    },
-    {
-      id: '5',
-      voucherNumber: 'RV-2026-00103',
-      voucherType: 'RECEIPT',
-      voucherDate: new Date(Date.now() - 3600000 * 20).toISOString(),
-      amount: 68000,
-      treasuryName: 'خزينة المبيعات - المصنع المركزي',
-      partyName: 'سوبر ماركت الفرجاني - فرع الجامعة',
-      branchName: 'المصنع المركزي (سندوب)',
-      branchId: '1',
-      paymentMethod: 'CHEQUE',
-      notes: 'سداد شيك مستحق عن توريدات مخبوزات وتورت الأسبوع الماضي',
-      status: 'POSTED',
-      accountCode: '110201',
-      accountName: 'أوراق القبض والشيكات',
-    },
-  ];
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
   ) {}
 
+  // 1. جلب كافة سندات القبض والصرف الرسمية مباشرة من Neon DB
   async findAll(voucherType?: string, branchId?: string) {
-    let list = [...this.vouchers];
+    const tenant = getCurrentTenant();
+    const where: any = {
+      reference_type: { in: ['RECEIPT_VOUCHER', 'PAYMENT_VOUCHER', 'RECEIPT', 'PAYMENT'] },
+    };
+
     if (voucherType) {
-      list = list.filter((v) => v.voucherType === voucherType.toUpperCase());
+      const normalized = voucherType.toUpperCase();
+      if (normalized === 'RECEIPT') {
+        where.reference_type = { in: ['RECEIPT_VOUCHER', 'RECEIPT'] };
+      } else if (normalized === 'PAYMENT') {
+        where.reference_type = { in: ['PAYMENT_VOUCHER', 'PAYMENT'] };
+      }
     }
-    if (branchId) {
-      list = list.filter((v) => v.branchId === String(branchId));
-    }
+
+    const entries = await this.prisma.journal_entries.findMany({
+      where,
+      include: {
+        journal_entry_lines: {
+          include: {
+            accounts: true,
+          },
+        },
+      },
+      orderBy: { id: 'desc' },
+      take: 100,
+    });
+
+    const serialized = entries.map((e) => {
+      const isPayment = e.reference_type?.includes('PAYMENT');
+      const lines = e.journal_entry_lines || [];
+      const amount = lines.reduce((max, l) => Math.max(max, Number(l.debit || 0), Number(l.credit || 0)), 0);
+
+      const mainLine = lines.find((l) => (isPayment ? Number(l.credit || 0) > 0 : Number(l.debit || 0) > 0)) || lines[0];
+      const offsetLine = lines.find((l) => l !== mainLine) || lines[1] || mainLine;
+
+      return {
+        id: String(e.id),
+        voucherNumber: e.entry_number,
+        voucherType: isPayment ? 'PAYMENT' : 'RECEIPT',
+        voucherDate: e.entry_date ? new Date(e.entry_date).toISOString() : new Date().toISOString(),
+        amount,
+        treasuryName: mainLine?.accounts?.account_name || 'الخزينة المركزية - مصنع أبو عادل',
+        partyName: e.notes?.split(' - ')[0] || offsetLine?.accounts?.account_name || 'طرف عام',
+        branchName: 'المصنع المركزي (سندوب)',
+        branchId: '1',
+        paymentMethod: 'CASH',
+        notes: e.notes || 'سند معتمد آلياً وفق الحسابات العامة',
+        status: e.status || 'POSTED',
+        accountCode: offsetLine?.accounts?.account_code || (isPayment ? '210101' : '110101'),
+        accountName: offsetLine?.accounts?.account_name || (isPayment ? 'الموردين والجهات الدائنة' : 'الصندوق والخزينة المركزية'),
+      };
+    });
+
     return {
       success: true,
-      data: list.sort((a, b) => new Date(b.voucherDate).getTime() - new Date(a.voucherDate).getTime()),
+      data: serialized,
     };
   }
 
+  // 2. إحصائيات السيولة النقدية وسندات الخزينة المعتمدة من Neon DB
   async getStats() {
+    const entries = await this.prisma.journal_entries.findMany({
+      where: {
+        reference_type: { in: ['RECEIPT_VOUCHER', 'PAYMENT_VOUCHER', 'RECEIPT', 'PAYMENT'] },
+      },
+      include: {
+        journal_entry_lines: true,
+      },
+    });
+
     let totalReceipts = 0;
     let totalPayments = 0;
+    let receiptsCount = 0;
+    let paymentsCount = 0;
 
-    this.vouchers.forEach((v) => {
-      const amt = Number(v.amount) || 0;
-      if (v.voucherType === 'RECEIPT') totalReceipts += amt;
-      if (v.voucherType === 'PAYMENT') totalPayments += amt;
+    entries.forEach((e) => {
+      const isPayment = e.reference_type?.includes('PAYMENT');
+      const amt = (e.journal_entry_lines || []).reduce(
+        (max, l) => Math.max(max, Number(l.debit || 0), Number(l.credit || 0)),
+        0,
+      );
+
+      if (isPayment) {
+        totalPayments += amt;
+        paymentsCount += 1;
+      } else {
+        totalReceipts += amt;
+        receiptsCount += 1;
+      }
     });
 
     const netLiquidity = totalReceipts - totalPayments;
@@ -138,58 +125,121 @@ export class TreasuryService {
         totalReceipts,
         totalPayments,
         netLiquidity,
-        voucherCount: this.vouchers.length,
-        receiptsCount: this.vouchers.filter((v) => v.voucherType === 'RECEIPT').length,
-        paymentsCount: this.vouchers.filter((v) => v.voucherType === 'PAYMENT').length,
+        voucherCount: entries.length,
+        receiptsCount,
+        paymentsCount,
       },
     };
   }
 
+  // 3. إصدار سند قبض أو صرف جديد وحفظه مباشرة في Neon DB كقيد يومية معتمد
   async create(dto: CreateTreasuryVoucherDto) {
     if (!dto.voucherType || !dto.amount || !dto.partyName) {
       throw new BadRequestException('النوع والمبلغ والطرف المعني بيانات إلزامية لإصدار السند');
     }
 
-    const prefix = dto.voucherType === 'RECEIPT' ? 'RV' : 'PV';
-    const count = this.vouchers.filter((v) => v.voucherType === dto.voucherType).length + 1;
-    const voucherNumber = `${prefix}-${new Date().getFullYear()}-${String(count + 100).padStart(5, '0')}`;
+    const tenant = getCurrentTenant();
+    const companyId = tenant?.companyId || 1n;
 
-    const newVoucher = {
-      id: String(this.vouchers.length + 1),
+    const prefix = dto.voucherType === 'RECEIPT' ? 'RV' : 'PV';
+    const timestamp = Date.now().toString().slice(-6);
+    const voucherNumber = `${prefix}-${new Date().getFullYear()}-${timestamp}`;
+
+    // البحث عن حساب الخزينة والحساب المقابل في شجرة الحسابات
+    let treasuryAccount = await this.prisma.accounts.findFirst({
+      where: {
+        OR: [
+          { account_code: { startsWith: '11' } },
+          { account_name: { contains: 'خزينة' } },
+          { account_name: { contains: 'صندوق' } },
+        ],
+      },
+    });
+
+    if (!treasuryAccount) {
+      treasuryAccount = await this.prisma.accounts.findFirst();
+    }
+
+    let offsetAccount = await this.prisma.accounts.findFirst({
+      where: {
+        account_code: dto.accountCode || (dto.voucherType === 'RECEIPT' ? '4101' : '5101'),
+      },
+    });
+
+    if (!offsetAccount) {
+      offsetAccount = treasuryAccount;
+    }
+
+    const amountNum = Number(dto.amount);
+    const isPayment = dto.voucherType === 'PAYMENT';
+
+    const journalEntry = await this.prisma.journal_entries.create({
+      data: {
+        company_id: companyId,
+        entry_number: voucherNumber,
+        reference_type: isPayment ? 'PAYMENT_VOUCHER' : 'RECEIPT_VOUCHER',
+        reference_number: voucherNumber,
+        entry_date: new Date(),
+        status: 'POSTED',
+        notes: `${dto.partyName.trim()} - ${dto.notes || 'سند خزينة'}`,
+        created_at: new Date(),
+        journal_entry_lines: {
+          create: [
+            {
+              account_id: treasuryAccount!.id,
+              debit: isPayment ? 0 : amountNum,
+              credit: isPayment ? amountNum : 0,
+              description: `سند ${isPayment ? 'صرف' : 'قبض'} رقم ${voucherNumber} - ${dto.partyName}`,
+              notes: dto.notes || '',
+              created_at: new Date(),
+            },
+            {
+              account_id: offsetAccount!.id,
+              debit: isPayment ? amountNum : 0,
+              credit: isPayment ? 0 : amountNum,
+              description: `الطرف المقابل: ${dto.partyName}`,
+              notes: dto.notes || '',
+              created_at: new Date(),
+            },
+          ],
+        },
+      },
+      include: {
+        journal_entry_lines: {
+          include: { accounts: true },
+        },
+      },
+    });
+
+    const createdVoucher = {
+      id: String(journalEntry.id),
       voucherNumber,
       voucherType: dto.voucherType,
-      voucherDate: new Date().toISOString(),
-      amount: Number(dto.amount),
-      treasuryName: dto.treasuryName || 'الخزينة المركزية - مصنع أبو عادل',
+      voucherDate: journalEntry.entry_date.toISOString(),
+      amount: amountNum,
+      treasuryName: treasuryAccount?.account_name || 'الخزينة المركزية',
       partyName: dto.partyName.trim(),
       branchName: dto.branchName || 'المصنع المركزي (سندوب)',
       branchId: String(dto.branchId || '1'),
       paymentMethod: dto.paymentMethod || 'CASH',
-      notes: dto.notes || 'سند معتمد آلياً وفق الحسابات العامة',
+      notes: dto.notes || '',
       status: 'POSTED',
-      accountCode: dto.accountCode || (dto.voucherType === 'RECEIPT' ? '110101' : '210101'),
-      accountName: dto.accountName || (dto.voucherType === 'RECEIPT' ? 'الصندوق والخزينة المركزية' : 'الموردين والجهات الدائنة'),
+      accountCode: offsetAccount?.account_code || '',
+      accountName: offsetAccount?.account_name || '',
     };
-
-    this.vouchers.unshift(newVoucher);
 
     // البث المباشر عبر WebSocket
     try {
-      this.realtime.server?.emit('treasury_voucher_created', {
-        voucherNumber: newVoucher.voucherNumber,
-        voucherType: newVoucher.voucherType,
-        amount: newVoucher.amount,
-        partyName: newVoucher.partyName,
-        time: newVoucher.voucherDate,
-      });
+      this.realtime.emitTenantUpdate(companyId, 'treasury_voucher_created', createdVoucher);
+      this.realtime.server?.emit('treasury_voucher_created', createdVoucher);
     } catch (e) {
       console.warn('Realtime emit failed:', e);
     }
 
     return {
       success: true,
-      data: newVoucher,
-      message: `تم إصدار ${dto.voucherType === 'RECEIPT' ? 'سند القبض' : 'سند الصرف'} رقم [${voucherNumber}] بنجاح`,
+      data: createdVoucher,
+      message: `تم إصدار ${dto.voucherType === 'RECEIPT' ? 'سند القبض' : 'سند الصرف'} رقم [${voucherNumber}] بنجاح وحفظه في Neon DB`,
     };
   }
 }

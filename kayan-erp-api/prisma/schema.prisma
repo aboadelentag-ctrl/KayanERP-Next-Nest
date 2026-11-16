@@ -148,8 +148,13 @@ model branches {
   companies        companies          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   employees        employees[]
   sales_invoices   sales_invoices[]
-  sales_orders     sales_orders[]
-  warehouses       warehouses[]
+  sales_orders       sales_orders[]
+  warehouses         warehouses[]
+  delivery_zones     delivery_zones[]
+  engineering_assets engineering_assets[]
+  fabrication_orders fabrication_orders[]
+  housekeeping_workers housekeeping_workers[]
+  sanitation_zones   sanitation_zones[]
 
   @@unique([company_id, branch_code])
   @@unique([company_id, branch_code], map: "ux_branches_company_code")
@@ -209,6 +214,26 @@ model companies {
   users_users_company_idTocompanies users[]                     @relation("users_company_idTocompanies")
   warehouses                        warehouses[]
   waste_records                     waste_records[]
+  delivery_zones                    delivery_zones[]
+  customer_addresses                customer_addresses[]
+  call_logs                         call_logs[]
+  customer_complaints               customer_complaints[]
+  engineering_workshops             engineering_workshops[]
+  maintenance_workflow_routes       maintenance_workflow_routes[]
+  fabrication_workflow_routes       fabrication_workflow_routes[]
+  engineering_assets                engineering_assets[]
+  engineering_staff                 engineering_staff[]
+  engineering_materials             engineering_materials[]
+  material_issuance_logs            material_issuance_logs[]
+  fabrication_orders                fabrication_orders[]
+  maintenance_tickets               maintenance_tickets[]
+  housekeeping_workers              housekeeping_workers[]
+  sanitation_zones                  sanitation_zones[]
+  sanitation_task_logs              sanitation_task_logs[]
+  sanitation_supplies               sanitation_supplies[]
+  sanitation_supply_issuances       sanitation_supply_issuances[]
+  personal_hygiene_checks           personal_hygiene_checks[]
+  custom_app_icons                  custom_app_icons[]
 }
 
 model crate_client_transactions {
@@ -300,12 +325,18 @@ model customers {
   tax_number    String?        @db.VarChar(100)
   payment_terms String?        @db.VarChar(100)
   credit_limit  Decimal        @db.Decimal(18, 2)
-  active        Boolean        @default(true)
-  notes         String?
-  created_at    DateTime       @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime       @default(now()) @db.Timestamptz(6)
-  companies     companies      @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sales_orders  sales_orders[]
+  active              Boolean               @default(true)
+  notes               String?
+  trust_score         Int                   @default(100)
+  complaints_count    Int                   @default(0)
+  preferences_notes   String?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  companies           companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sales_orders        sales_orders[]
+  customer_addresses  customer_addresses[]
+  call_logs           call_logs[]
+  customer_complaints customer_complaints[]
 
   @@unique([company_id, customer_code])
   @@unique([company_id, customer_code], map: "ux_customers_company_code")
@@ -471,12 +502,45 @@ model finished_goods_transfers {
   costing_dispute_resolved_at                                              DateTime?  @db.Timestamp(6)
   costing_dispute_charge_to                                                String?    @db.VarChar(100)
   control_dispute_charge_to                                                String?    @db.VarChar(100)
+  tenant_id                                                                String?    @default("tenant_1") @db.VarChar(50)
+  company_id                                                               BigInt?    @default(1)
+  items_json                                                               Json?
+  items_count                                                              Int?       @default(1)
+  finished_goods_transfer_items                                            finished_goods_transfer_items[]
   warehouses_finished_goods_transfers_destination_warehouse_idTowarehouses warehouses @relation("finished_goods_transfers_destination_warehouse_idTowarehouses", fields: [destination_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   items                                                                    items      @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   warehouses_finished_goods_transfers_source_warehouse_idTowarehouses      warehouses @relation("finished_goods_transfers_source_warehouse_idTowarehouses", fields: [source_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([transfer_number], map: "idx_fg_transfer_num")
   @@index([status], map: "idx_fg_transfer_status")
+}
+
+model finished_goods_transfer_items {
+  id                       BigInt                   @id @default(autoincrement())
+  transfer_id              BigInt
+  item_id                  BigInt
+  batch_number             String?                  @db.VarChar(100)
+  expiry_date              DateTime?                @db.Date
+  prod_dispatched_qty      Decimal                  @db.Decimal(12, 2)
+  prod_dispatched_count    Int?                     @default(0)
+  work_order_target_qty    Decimal?                 @db.Decimal(12, 2)
+  work_order_delivered_qty Decimal?                 @db.Decimal(12, 2)
+  work_order_remaining_qty Decimal?                 @db.Decimal(12, 2)
+  costing_actual_qty       Decimal?                 @db.Decimal(12, 2)
+  costing_actual_count     Int?                     @default(0)
+  qc_approved_qty          Decimal?                 @default(0) @db.Decimal(12, 2)
+  qc_sample_qty            Decimal?                 @default(0) @db.Decimal(12, 2)
+  qc_rework_qty            Decimal?                 @default(0) @db.Decimal(12, 2)
+  qc_scrap_qty             Decimal?                 @default(0) @db.Decimal(12, 2)
+  received_actual_qty      Decimal?                 @db.Decimal(12, 2)
+  received_actual_count    Int?                     @default(0)
+  notes                    String?
+  created_at               DateTime?                @default(now()) @db.Timestamp(6)
+  finished_goods_transfers finished_goods_transfers @relation(fields: [transfer_id], references: [id], onDelete: Cascade)
+  items                    items                    @relation(fields: [item_id], references: [id], onDelete: NoAction)
+
+  @@index([transfer_id])
+  @@index([item_id])
 }
 
 model fixed_assets {
@@ -591,6 +655,7 @@ model items {
   asset_movements            asset_movements[]
   branch_transfers           branch_transfers[]
   finished_goods_transfers   finished_goods_transfers[]
+  finished_goods_transfer_items finished_goods_transfer_items[]
   item_unit_conversions      item_unit_conversions[]
   item_uom_conversions       item_uom_conversions[]
   item_variants              item_variants[]
@@ -1131,51 +1196,61 @@ model sales_invoices {
 }
 
 model sales_order_lines {
-  id                 BigInt       @id @default(autoincrement())
+  id                 BigInt             @id @default(autoincrement())
   sales_order_id     BigInt
   item_id            BigInt
-  quantity           Decimal      @db.Decimal(18, 6)
-  unit_price         Decimal      @db.Decimal(18, 2)
-  discount_amount    Decimal      @db.Decimal(18, 2)
-  tax_amount         Decimal      @db.Decimal(18, 2)
-  line_total         Decimal?     @db.Decimal(18, 2)
-  delivered_quantity Decimal      @db.Decimal(18, 6)
+  batch_id           BigInt?
+  quantity           Decimal            @db.Decimal(18, 6)
+  unit_price         Decimal            @db.Decimal(18, 2)
+  discount_amount    Decimal            @db.Decimal(18, 2)
+  tax_amount         Decimal            @db.Decimal(18, 2)
+  line_total         Decimal?           @db.Decimal(18, 2)
+  delivered_quantity Decimal            @db.Decimal(18, 6)
   notes              String?
-  items              items        @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_lines_item_fk")
-  sales_orders       sales_orders @relation(fields: [sales_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_lines_order_fk")
+  items              items              @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_lines_item_fk")
+  sales_orders       sales_orders       @relation(fields: [sales_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_lines_order_fk")
+  inventory_batches  inventory_batches? @relation(fields: [batch_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "sales_lines_batch_fk")
 
   @@index([item_id], map: "idx_sales_lines_item")
   @@index([sales_order_id], map: "idx_sales_lines_order")
+  @@index([batch_id], map: "idx_sales_lines_batch")
 }
 
 model sales_orders {
-  id                BigInt              @id @default(autoincrement())
-  company_id        BigInt
-  branch_id         BigInt?
-  customer_id       BigInt?
-  warehouse_id      BigInt
-  order_number      String              @db.VarChar(50)
-  order_date        DateTime            @default(dbgenerated("CURRENT_DATE")) @db.Date
-  status            String              @default("DRAFT") @db.VarChar(30)
-  subtotal          Decimal             @db.Decimal(18, 2)
-  discount_amount   Decimal             @db.Decimal(18, 2)
-  tax_amount        Decimal             @db.Decimal(18, 2)
-  total_amount      Decimal             @db.Decimal(18, 2)
-  notes             String?
-  slip_number       String?             @db.VarChar(50)
-  salesman_id       BigInt?
-  salesman_name     String?             @db.VarChar(100)
-  cashier_id        BigInt?
-  paid_at           DateTime?           @db.Timestamptz(6)
-  dispatcher_id     BigInt?
-  delivered_at      DateTime?           @db.Timestamptz(6)
-  created_at        DateTime            @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
-  sales_order_lines sales_order_lines[]
-  branches          branches?           @relation(fields: [branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_branch_fk")
-  companies         companies           @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_company_fk")
-  customers         customers?          @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_customer_fk")
-  warehouses        warehouses          @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_warehouse_fk")
+  id                  BigInt                @id @default(autoincrement())
+  company_id          BigInt
+  branch_id           BigInt?
+  customer_id         BigInt?
+  warehouse_id        BigInt
+  order_number        String                @db.VarChar(50)
+  order_date          DateTime              @default(dbgenerated("CURRENT_DATE")) @db.Date
+  status              String                @default("DRAFT") @db.VarChar(30)
+  subtotal            Decimal               @db.Decimal(18, 2)
+  discount_amount     Decimal               @db.Decimal(18, 2)
+  tax_amount          Decimal               @db.Decimal(18, 2)
+  total_amount        Decimal               @db.Decimal(18, 2)
+  notes               String?
+  slip_number         String?               @db.VarChar(50)
+  salesman_id         BigInt?
+  salesman_name       String?               @db.VarChar(100)
+  cashier_id          BigInt?
+  paid_at             DateTime?             @db.Timestamptz(6)
+  dispatcher_id       BigInt?
+  delivered_at        DateTime?             @db.Timestamptz(6)
+  order_source        String?               @default("POS_BRANCH") @db.VarChar(50)
+  delivery_status     String?               @default("PENDING_BRANCH") @db.VarChar(50)
+  driver_id           BigInt?
+  driver_name         String?               @db.VarChar(100)
+  delivery_fee        Decimal?              @default(0) @db.Decimal(18, 2)
+  delivery_zone_id    BigInt?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  sales_order_lines   sales_order_lines[]
+  customer_complaints customer_complaints[]
+  branches            branches?             @relation(fields: [branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_branch_fk")
+  companies           companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_company_fk")
+  customers           customers?            @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_customer_fk")
+  warehouses          warehouses            @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sales_orders_warehouse_fk")
 
   @@unique([company_id, order_number])
   @@index([branch_id], map: "IX_sales_orders_branch_id")
@@ -1454,4 +1529,787 @@ model waste_records {
   @@index([production_stage_id], map: "IX_waste_records_production_stage_id")
   @@index([warehouse_id], map: "IX_waste_records_warehouse_id")
   @@index([production_order_id], map: "idx_waste_production")
+}
+
+
+// ==========================================
+// 1. MES & BOM MODULE
+// ==========================================
+
+model bom_headers {
+  id                 BigInt        @id @default(autoincrement())
+  company_id         BigInt
+  item_id            BigInt
+  bom_code           String        @db.VarChar(50)
+  bom_name           String        @db.VarChar(200)
+  version            String        @default("1.0") @db.VarChar(20)
+  is_active          Boolean       @default(true)
+  standard_batch_qty Decimal       @db.Decimal(18, 3)
+  batch_unit         String        @db.VarChar(50)
+  total_cost         Decimal?      @default(0) @db.Decimal(18, 4)
+  notes              String?
+  created_at         DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime      @default(now()) @db.Timestamptz(6)
+  bom_items          bom_items[]
+  work_orders        work_orders[]
+
+  @@unique([company_id, bom_code, version], map: "ux_bom_headers_code_version")
+  @@index([company_id], map: "idx_bom_headers_company")
+  @@index([item_id], map: "idx_bom_headers_item")
+}
+
+model bom_items {
+  id                 BigInt      @id @default(autoincrement())
+  bom_header_id      BigInt
+  component_item_id  BigInt
+  quantity           Decimal     @db.Decimal(18, 4)
+  unit               String      @db.VarChar(50)
+  scrap_factor_pct   Decimal     @default(0) @db.Decimal(6, 2)
+  item_type          String      @default("RAW_MATERIAL") @db.VarChar(30)
+  parent_bom_item_id BigInt?
+  line_number        Int         @default(1)
+  notes              String?
+  created_at         DateTime    @default(now()) @db.Timestamptz(6)
+  bom_headers        bom_headers @relation(fields: [bom_header_id], references: [id], onDelete: Cascade)
+  parent_item        bom_items?  @relation("bom_item_hierarchy", fields: [parent_bom_item_id], references: [id])
+  child_items        bom_items[] @relation("bom_item_hierarchy")
+
+  @@index([bom_header_id], map: "idx_bom_items_header")
+  @@index([component_item_id], map: "idx_bom_items_component")
+}
+
+model work_orders {
+  id                 BigInt              @id @default(autoincrement())
+  company_id         BigInt
+  work_order_number  String              @db.VarChar(50)
+  batch_id           String              @db.VarChar(50)
+  bom_header_id      BigInt?
+  item_id            BigInt
+  warehouse_id       BigInt
+  target_quantity    Decimal             @db.Decimal(18, 3)
+  produced_quantity  Decimal             @default(0) @db.Decimal(18, 3)
+  scrap_quantity     Decimal             @default(0) @db.Decimal(18, 3)
+  status             String              @default("PLANNED") @db.VarChar(30)
+  priority           String              @default("MEDIUM") @db.VarChar(20)
+  start_date         DateTime?           @db.Timestamptz(6)
+  end_date           DateTime?           @db.Timestamptz(6)
+  notes              String?
+  created_at         DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime            @default(now()) @db.Timestamptz(6)
+  bom_headers        bom_headers?        @relation(fields: [bom_header_id], references: [id])
+  routing_steps      routing_steps[]
+  work_order_scraps  work_order_scraps[]
+
+  @@unique([company_id, work_order_number], map: "ux_work_orders_number")
+  @@index([company_id], map: "idx_work_orders_company")
+  @@index([batch_id], map: "idx_work_orders_batch")
+  @@index([status], map: "idx_work_orders_status")
+}
+
+model routing_steps {
+  id                BigInt              @id @default(autoincrement())
+  work_order_id     BigInt
+  step_number       Int
+  step_name         String              @db.VarChar(100)
+  status            String              @default("PENDING") @db.VarChar(30)
+  planned_minutes   Int                 @default(60)
+  actual_minutes    Int?
+  input_quantity    Decimal?            @db.Decimal(18, 3)
+  output_quantity   Decimal?            @db.Decimal(18, 3)
+  operator_name     String?             @db.VarChar(100)
+  machine_code      String?             @db.VarChar(50)
+  started_at        DateTime?           @db.Timestamptz(6)
+  completed_at      DateTime?           @db.Timestamptz(6)
+  notes             String?
+  work_orders       work_orders         @relation(fields: [work_order_id], references: [id], onDelete: Cascade)
+  work_order_scraps work_order_scraps[]
+
+  @@unique([work_order_id, step_number], map: "ux_routing_steps_order_step")
+  @@index([work_order_id], map: "idx_routing_steps_order")
+}
+
+model work_order_scraps {
+  id                    BigInt         @id @default(autoincrement())
+  work_order_id         BigInt
+  routing_step_id       BigInt?
+  item_id               BigInt
+  quantity              Decimal        @db.Decimal(18, 3)
+  scrap_reason_category String         @db.VarChar(30)
+  scrap_reason_detail   String         @db.VarChar(250)
+  logged_by             String?        @db.VarChar(100)
+  created_at            DateTime       @default(now()) @db.Timestamptz(6)
+  work_orders           work_orders    @relation(fields: [work_order_id], references: [id], onDelete: Cascade)
+  routing_steps         routing_steps? @relation(fields: [routing_step_id], references: [id])
+
+  @@index([work_order_id], map: "idx_work_order_scraps_order")
+}
+
+model shift_logs {
+  id              BigInt   @id @default(autoincrement())
+  company_id      BigInt
+  shift_name      String   @db.VarChar(50)
+  supervisor_name String   @db.VarChar(100)
+  log_date        DateTime @default(now()) @db.Date
+  wip_notes       String?
+  handover_notes  String?
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([company_id], map: "idx_shift_logs_company")
+}
+
+// ==========================================
+// 2. WAREHOUSES, FEFO & BATCHES MODULE
+// ==========================================
+
+model inventory_batches {
+  id                  BigInt                @id @default(autoincrement())
+  company_id          BigInt
+  warehouse_id        BigInt
+  item_id             BigInt
+  batch_number        String                @db.VarChar(100)
+  production_date     DateTime              @db.Date
+  expiry_date         DateTime              @db.Date
+  initial_quantity    Decimal               @db.Decimal(18, 3)
+  current_quantity    Decimal               @db.Decimal(18, 3)
+  cost_price          Decimal               @default(0) @db.Decimal(18, 4)
+  status              String                @default("RELEASED") @db.VarChar(30)
+  is_frozen           Boolean               @default(false)
+  freeze_reason       String?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  sales_order_lines   sales_order_lines[]
+  customer_complaints customer_complaints[]
+
+  @@unique([company_id, warehouse_id, item_id, batch_number], map: "ux_inventory_batches_unique")
+  @@index([company_id, item_id, expiry_date], map: "idx_inventory_batches_fefo")
+  @@index([warehouse_id], map: "idx_inventory_batches_warehouse")
+}
+
+model product_recalls {
+  id                BigInt   @id @default(autoincrement())
+  company_id        BigInt
+  recall_number     String   @db.VarChar(50)
+  batch_number      String   @db.VarChar(100)
+  item_id           BigInt
+  recall_reason     String   @db.VarChar(500)
+  severity_level    String   @db.VarChar(20)
+  status            String   @default("ACTIVE") @db.VarChar(30)
+  recalled_quantity Decimal  @default(0) @db.Decimal(18, 3)
+  disposed_quantity Decimal  @default(0) @db.Decimal(18, 3)
+  initiated_by      String   @db.VarChar(100)
+  initiated_at      DateTime @default(now()) @db.Timestamptz(6)
+  notes             String?
+
+  @@unique([company_id, recall_number], map: "ux_product_recalls_number")
+  @@index([batch_number], map: "idx_product_recalls_batch")
+}
+
+// ==========================================
+// 3. QMS & HACCP MODULE
+// ==========================================
+
+model ccp_logs {
+  id                      BigInt   @id @default(autoincrement())
+  company_id              BigInt
+  ccp_point_code          String   @db.VarChar(50)
+  ccp_point_name          String   @db.VarChar(150)
+  reading_type            String   @db.VarChar(50)
+  value_numeric           Decimal? @db.Decimal(10, 2)
+  value_text              String?  @db.VarChar(100)
+  critical_limit_min      Decimal? @db.Decimal(10, 2)
+  critical_limit_max      Decimal? @db.Decimal(10, 2)
+  is_deviation            Boolean  @default(false)
+  checked_by              String   @db.VarChar(100)
+  checked_at              DateTime @default(now()) @db.Timestamptz(6)
+  corrective_action_taken String?
+
+  @@index([company_id], map: "idx_ccp_logs_company")
+  @@index([ccp_point_code], map: "idx_ccp_logs_point")
+}
+
+model non_conformance_reports {
+  id                   BigInt    @id @default(autoincrement())
+  company_id           BigInt
+  ncr_number           String    @db.VarChar(50)
+  source_type          String    @db.VarChar(50)
+  item_id              BigInt?
+  batch_number         String?   @db.VarChar(100)
+  defect_title         String    @db.VarChar(250)
+  defect_description   String
+  root_cause_analysis  String?
+  disposition          String?   @db.VarChar(50)
+  status               String    @default("OPEN") @db.VarChar(30)
+  reported_by          String    @db.VarChar(100)
+  created_at           DateTime  @default(now()) @db.Timestamptz(6)
+  closed_at            DateTime? @db.Timestamptz(6)
+
+  @@unique([company_id, ncr_number], map: "ux_ncr_number")
+  @@index([company_id], map: "idx_ncr_company")
+}
+
+// ==========================================
+// 4. ACTION MANAGEMENT SYSTEM (AMS)
+// ==========================================
+
+model ams_tasks {
+  id                   BigInt    @id @default(autoincrement())
+  company_id           BigInt
+  task_code            String    @db.VarChar(50)
+  title                String    @db.VarChar(250)
+  description          String
+  task_type            String    @db.VarChar(50)
+  priority             String    @default("HIGH") @db.VarChar(20)
+  assigned_to_user_id  BigInt?
+  assignee_name        String    @db.VarChar(150)
+  assignee_phone       String?   @db.VarChar(50)
+  sla_deadline         DateTime  @db.Timestamptz(6)
+  escalation_level     Int       @default(1)
+  status               String    @default("PENDING") @db.VarChar(30)
+  whatsapp_status      String    @default("PENDING_DISPATCH") @db.VarChar(30)
+  resolution_notes     String?
+  resolved_at          DateTime? @db.Timestamptz(6)
+  created_at           DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([company_id, task_code], map: "ux_ams_tasks_code")
+  @@index([company_id], map: "idx_ams_tasks_company")
+  @@index([status], map: "idx_ams_tasks_status")
+}
+
+// ==========================================
+// 5. FLEET & COLD CHAIN MODULE
+// ==========================================
+
+model fleet_vehicles {
+  id                  BigInt   @id @default(autoincrement())
+  company_id          BigInt
+  plate_number        String   @db.VarChar(50)
+  vehicle_type        String   @db.VarChar(50)
+  driver_name         String   @db.VarChar(100)
+  driver_phone        String?  @db.VarChar(50)
+  current_temperature Decimal? @db.Decimal(5, 2)
+  temperature_target  Decimal? @default(4.0) @db.Decimal(5, 2)
+  status              String   @default("AVAILABLE") @db.VarChar(30)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([company_id, plate_number], map: "ux_fleet_vehicles_plate")
+  @@index([company_id], map: "idx_fleet_vehicles_company")
+}
+
+model proof_of_deliveries {
+  id                    BigInt   @id @default(autoincrement())
+  company_id            BigInt
+  vehicle_id            BigInt?
+  pod_number            String   @db.VarChar(50)
+  branch_or_client_name String   @db.VarChar(200)
+  delivery_date         DateTime @default(now()) @db.Timestamptz(6)
+  receiver_name         String   @db.VarChar(100)
+  handover_temp         Decimal? @db.Decimal(5, 2)
+  items_count           Int      @default(1)
+  status                String   @default("DELIVERED") @db.VarChar(30)
+  signature_url         String?
+  notes                 String?
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([company_id, pod_number], map: "ux_proof_of_deliveries_number")
+  @@index([company_id], map: "idx_proof_of_deliveries_company")
+}
+
+// ==========================================
+// 6. CALL CENTER, DISPATCH & COMPLAINTS MODULE
+// ==========================================
+
+model delivery_zones {
+  id                 BigInt               @id @default(autoincrement())
+  company_id         BigInt
+  branch_id          BigInt
+  name               String               @db.VarChar(150)
+  delivery_fee       Decimal              @default(0) @db.Decimal(18, 2)
+  estimated_minutes  Int                  @default(45)
+  is_active          Boolean              @default(true)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime             @default(now()) @db.Timestamptz(6)
+  branches           branches             @relation(fields: [branch_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_delivery_zones_branch")
+  companies          companies            @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_delivery_zones_company")
+  customer_addresses customer_addresses[]
+
+  @@index([company_id], map: "ix_delivery_zones_company")
+  @@index([branch_id], map: "ix_delivery_zones_branch")
+}
+
+model customer_addresses {
+  id             BigInt          @id @default(autoincrement())
+  company_id     BigInt
+  customer_id    BigInt
+  zone_id        BigInt?
+  label          String          @default("المنزل") @db.VarChar(50)
+  street_address String
+  landmark       String?         @db.VarChar(200)
+  floor          String?         @db.VarChar(20)
+  apartment      String?         @db.VarChar(20)
+  is_default     Boolean         @default(false)
+  created_at     DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime        @default(now()) @db.Timestamptz(6)
+  customers      customers       @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_customer_addresses_customer")
+  delivery_zones delivery_zones? @relation(fields: [zone_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_customer_addresses_zone")
+  companies      companies       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_addresses_company")
+
+  @@index([company_id, customer_id], map: "ix_customer_addresses_customer")
+  @@index([zone_id], map: "ix_customer_addresses_zone")
+}
+
+model call_logs {
+  id           BigInt     @id @default(autoincrement())
+  company_id   BigInt
+  customer_id  BigInt?
+  agent_id     BigInt?
+  call_type    String     @db.VarChar(50)
+  phone_number String     @db.VarChar(50)
+  notes        String?
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  customers    customers? @relation(fields: [customer_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_call_logs_customer")
+  companies    companies  @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_call_logs_company")
+
+  @@index([company_id, phone_number], map: "ix_call_logs_phone")
+  @@index([customer_id], map: "ix_call_logs_customer")
+}
+
+model customer_complaints {
+  id                           BigInt              @id @default(autoincrement())
+  company_id                   BigInt
+  ticket_number                String              @db.VarChar(50)
+  customer_id                  BigInt
+  sales_order_id               BigInt?
+  batch_id                     BigInt?
+  category                     String              @db.VarChar(50)
+  severity                     String              @default("MEDIUM") @db.VarChar(30)
+  description                  String
+  investigation_result         String              @default("UNDER_INVESTIGATION") @db.VarChar(50)
+  batch_other_buyers_count     Int                 @default(0)
+  batch_other_complaints_count Int                 @default(0)
+  status                       String              @default("OPEN") @db.VarChar(30)
+  ams_task_id                  BigInt?
+  resolution_notes             String?
+  resolved_at                  DateTime?           @db.Timestamptz(6)
+  created_at                   DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime            @default(now()) @db.Timestamptz(6)
+  customers                    customers           @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_complaints_customer")
+  sales_orders                 sales_orders?       @relation(fields: [sales_order_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_customer_complaints_order")
+  inventory_batches            inventory_batches?  @relation(fields: [batch_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_customer_complaints_batch")
+  companies                    companies           @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_complaints_company")
+
+  @@index([company_id, ticket_number], map: "ix_customer_complaints_ticket")
+  @@index([customer_id], map: "ix_customer_complaints_customer")
+  @@index([batch_id], map: "ix_customer_complaints_batch")
+  @@index([status], map: "ix_customer_complaints_status")
+}
+
+// ==========================================
+// 7. ENGINEERING, CMMS, WORKSHOPS & INTERNAL FABRICATION
+// ==========================================
+
+model engineering_workshops {
+  id                          BigInt                        @id @default(autoincrement())
+  company_id                  BigInt
+  code                        String                        @db.VarChar(50)
+  name                        String                        @db.VarChar(150)
+  specialty_type              String                        @db.VarChar(50)
+  supervisor_id               BigInt?
+  supervisor_name             String?                       @db.VarChar(150)
+  is_active                   Boolean                       @default(true)
+  created_at                  DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                      @default(now()) @db.Timestamptz(6)
+  companies                   companies                     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workshops_company")
+  maintenance_workflow_routes maintenance_workflow_routes[]
+  fabrication_workflow_routes fabrication_workflow_routes[]
+  engineering_staff           engineering_staff[]
+  fabrication_orders          fabrication_orders[]
+  maintenance_tickets         maintenance_tickets[]
+
+  @@unique([company_id, code], map: "ux_workshops_company_code")
+  @@index([company_id], map: "ix_workshops_company")
+}
+
+model maintenance_workflow_routes {
+  id                    BigInt                @id @default(autoincrement())
+  company_id            BigInt
+  workshop_id           BigInt
+  name                  String                @db.VarChar(150)
+  severity              String                @default("NORMAL") @db.VarChar(30)
+  steps_json            Json
+  sla_minutes           Int                   @default(60)
+  is_active             Boolean               @default(true)
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime              @default(now()) @db.Timestamptz(6)
+  companies             companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_maint_routes_company")
+  engineering_workshops engineering_workshops @relation(fields: [workshop_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_maint_routes_workshop")
+  maintenance_tickets   maintenance_tickets[]
+
+  @@index([company_id], map: "ix_maint_routes_company")
+  @@index([workshop_id], map: "ix_maint_routes_workshop")
+}
+
+model fabrication_workflow_routes {
+  id                    BigInt                @id @default(autoincrement())
+  company_id            BigInt
+  workshop_id           BigInt
+  name                  String                @db.VarChar(150)
+  steps_json            Json
+  is_active             Boolean               @default(true)
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime              @default(now()) @db.Timestamptz(6)
+  companies             companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_fab_routes_company")
+  engineering_workshops engineering_workshops @relation(fields: [workshop_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_fab_routes_workshop")
+  fabrication_orders    fabrication_orders[]
+
+  @@index([company_id], map: "ix_fab_routes_company")
+  @@index([workshop_id], map: "ix_fab_routes_workshop")
+}
+
+model engineering_assets {
+  id                       BigInt                @id @default(autoincrement())
+  company_id               BigInt
+  asset_code               String                @db.VarChar(50)
+  name                     String                @db.VarChar(150)
+  category                 String                @db.VarChar(50)
+  branch_id                BigInt?
+  serial_number            String?               @db.VarChar(100)
+  warranty_expiry          DateTime?             @db.Date
+  status                   String                @default("OPERATIONAL") @db.VarChar(30)
+  total_maintenance_cost   Decimal               @default(0) @db.Decimal(18, 2)
+  is_internally_fabricated Boolean               @default(false)
+  fabrication_order_id     BigInt?
+  created_at               DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime              @default(now()) @db.Timestamptz(6)
+  companies                companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_eng_assets_company")
+  branches                 branches?             @relation(fields: [branch_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_eng_assets_branch")
+  maintenance_tickets      maintenance_tickets[]
+
+  @@unique([company_id, asset_code], map: "ux_eng_assets_code")
+  @@index([company_id], map: "ix_eng_assets_company")
+  @@index([branch_id], map: "ix_eng_assets_branch")
+  @@index([category], map: "ix_eng_assets_category")
+  @@index([status], map: "ix_eng_assets_status")
+}
+
+model engineering_staff {
+  id                    BigInt                @id @default(autoincrement())
+  company_id            BigInt
+  name                  String                @db.VarChar(150)
+  phone                 String?               @db.VarChar(50)
+  user_id               BigInt?
+  role                  String                @default("TECHNICIAN") @db.VarChar(50)
+  workshop_id           BigInt
+  specialty             String                @db.VarChar(100)
+  hourly_cost_rate      Decimal               @default(50) @db.Decimal(18, 2)
+  is_available          Boolean               @default(true)
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime              @default(now()) @db.Timestamptz(6)
+  companies             companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_eng_staff_company")
+  engineering_workshops engineering_workshops @relation(fields: [workshop_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_eng_staff_workshop")
+  maintenance_tickets   maintenance_tickets[]
+
+  @@index([company_id], map: "ix_eng_staff_company")
+  @@index([workshop_id], map: "ix_eng_staff_workshop")
+}
+
+model engineering_materials {
+  id                     BigInt                   @id @default(autoincrement())
+  company_id             BigInt
+  code                   String                   @db.VarChar(50)
+  name                   String                   @db.VarChar(150)
+  material_type          String                   @db.VarChar(50)
+  unit                   String                   @db.VarChar(30)
+  current_stock          Decimal                  @default(0) @db.Decimal(18, 4)
+  min_stock_level        Decimal                  @default(0) @db.Decimal(18, 4)
+  unit_cost              Decimal                  @default(0) @db.Decimal(18, 2)
+  is_remnant             Boolean                  @default(false)
+  remnant_dimension      String?                  @db.VarChar(100)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  companies              companies                @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_eng_materials_company")
+  material_issuance_logs material_issuance_logs[]
+
+  @@unique([company_id, code], map: "ux_eng_materials_code")
+  @@index([company_id], map: "ix_eng_materials_company")
+  @@index([material_type], map: "ix_eng_materials_type")
+}
+
+model material_issuance_logs {
+  id                    BigInt                @id @default(autoincrement())
+  company_id            BigInt
+  material_id           BigInt
+  ticket_id             BigInt?
+  fabrication_order_id  BigInt?
+  quantity              Decimal               @db.Decimal(18, 4)
+  unit_cost             Decimal               @db.Decimal(18, 2)
+  total_cost            Decimal               @db.Decimal(18, 2)
+  is_remnant_return     Boolean               @default(false)
+  notes                 String?
+  issued_by_name        String?               @db.VarChar(150)
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  companies             companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_issuance_company")
+  engineering_materials engineering_materials @relation(fields: [material_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_issuance_material")
+  maintenance_tickets   maintenance_tickets?  @relation(fields: [ticket_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_issuance_ticket")
+  fabrication_orders    fabrication_orders?   @relation(fields: [fabrication_order_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_issuance_fab_order")
+
+  @@index([company_id], map: "ix_issuance_company")
+  @@index([material_id], map: "ix_issuance_material")
+  @@index([ticket_id], map: "ix_issuance_ticket")
+  @@index([fabrication_order_id], map: "ix_issuance_fab_order")
+}
+
+model fabrication_orders {
+  id                          BigInt                       @id @default(autoincrement())
+  company_id                  BigInt
+  order_number                String                       @db.VarChar(50)
+  workshop_id                 BigInt
+  route_id                    BigInt?
+  item_name                   String                       @db.VarChar(150)
+  quantity                    Int                          @default(1)
+  target_branch_id            BigInt?
+  bom_materials_json          Json?
+  labor_hours                 Decimal                      @default(0) @db.Decimal(8, 2)
+  materials_cost              Decimal                      @default(0) @db.Decimal(18, 2)
+  labor_cost                  Decimal                      @default(0) @db.Decimal(18, 2)
+  total_actual_cost           Decimal                      @default(0) @db.Decimal(18, 2)
+  status                      String                       @default("DRAFT") @db.VarChar(50)
+  current_step_name           String?                      @db.VarChar(100)
+  generated_asset_ids         Json?
+  notes                       String?
+  created_at                  DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                     @default(now()) @db.Timestamptz(6)
+  companies                   companies                    @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_fab_orders_company")
+  branches                    branches?                    @relation(fields: [target_branch_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_fab_orders_branch")
+  engineering_workshops       engineering_workshops        @relation(fields: [workshop_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_fab_orders_workshop")
+  fabrication_workflow_routes fabrication_workflow_routes? @relation(fields: [route_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_fab_orders_route")
+  material_issuance_logs      material_issuance_logs[]
+
+  @@unique([company_id, order_number], map: "ux_fab_orders_code")
+  @@index([company_id], map: "ix_fab_orders_company")
+  @@index([workshop_id], map: "ix_fab_orders_workshop")
+  @@index([target_branch_id], map: "ix_fab_orders_branch")
+  @@index([status], map: "ix_fab_orders_status")
+}
+
+model maintenance_tickets {
+  id                          BigInt                       @id @default(autoincrement())
+  company_id                  BigInt
+  ticket_number               String                       @db.VarChar(50)
+  title                       String                       @db.VarChar(250)
+  description                 String?
+  source_type                 String                       @default("EMERGENCY_BREAKDOWN") @db.VarChar(50)
+  priority                    String                       @default("NORMAL") @db.VarChar(30)
+  asset_id                    BigInt?
+  workshop_id                 BigInt?
+  route_id                    BigInt?
+  assigned_staff_id           BigInt?
+  assigned_staff_name         String?                      @db.VarChar(150)
+  status                      String                       @default("PENDING") @db.VarChar(50)
+  current_step_index          Int                          @default(0)
+  current_step_name           String?                      @db.VarChar(100)
+  steps_progress_json         Json?
+  sla_minutes                 Int                          @default(60)
+  sla_deadline                DateTime?                    @db.Timestamptz(6)
+  escalation_level            Int                          @default(1)
+  downtime_minutes            Int                          @default(0)
+  total_cost                  Decimal                      @default(0) @db.Decimal(18, 2)
+  requires_qa_clearance       Boolean                      @default(false)
+  qa_cleared_by_id            BigInt?
+  qa_cleared_by_name          String?                      @db.VarChar(150)
+  qa_cleared_at               DateTime?                    @db.Timestamptz(6)
+  closure_notes               String?
+  completed_at                DateTime?                    @db.Timestamptz(6)
+  created_at                  DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                     @default(now()) @db.Timestamptz(6)
+  companies                   companies                    @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_maint_tickets_company")
+  engineering_assets          engineering_assets?          @relation(fields: [asset_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_maint_tickets_asset")
+  engineering_workshops       engineering_workshops?       @relation(fields: [workshop_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_maint_tickets_workshop")
+  maintenance_workflow_routes maintenance_workflow_routes? @relation(fields: [route_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_maint_tickets_route")
+  engineering_staff           engineering_staff?           @relation(fields: [assigned_staff_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_maint_tickets_staff")
+  material_issuance_logs      material_issuance_logs[]
+  sanitation_task_logs        sanitation_task_logs[]
+
+  @@unique([company_id, ticket_number], map: "ux_maint_tickets_code")
+  @@index([company_id], map: "ix_maint_tickets_company")
+  @@index([asset_id], map: "ix_maint_tickets_asset")
+  @@index([workshop_id], map: "ix_maint_tickets_workshop")
+  @@index([status], map: "ix_maint_tickets_status")
+  @@index([priority], map: "ix_maint_tickets_priority")
+  @@index([source_type], map: "ix_maint_tickets_source")
+}
+
+model housekeeping_workers {
+  id                    BigInt                 @id @default(autoincrement())
+  company_id            BigInt
+  worker_code           String                 @db.VarChar(50)
+  full_name             String                 @db.VarChar(150)
+  phone                 String?                @db.VarChar(50)
+  branch_id             BigInt?
+  assigned_zone_type    String                 @default("PRODUCTION_HALL") @db.VarChar(50)
+  supervisor_id         BigInt?
+  supervisor_name       String?                @db.VarChar(150)
+  performance_score     Decimal                @default(100.0) @db.Decimal(5, 2)
+  is_active             Boolean                @default(true)
+  created_at            DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime               @default(now()) @db.Timestamptz(6)
+  companies             companies              @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_hk_workers_company")
+  branches              branches?              @relation(fields: [branch_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_hk_workers_branch")
+  sanitation_task_logs  sanitation_task_logs[]
+
+  @@unique([company_id, worker_code], map: "ux_hk_workers_code")
+  @@index([company_id], map: "ix_hk_workers_company")
+  @@index([branch_id], map: "ix_hk_workers_branch")
+  @@index([is_active], map: "ix_hk_workers_active")
+}
+
+model sanitation_zones {
+  id                   BigInt                 @id @default(autoincrement())
+  company_id           BigInt
+  zone_code            String                 @db.VarChar(50)
+  name                 String                 @db.VarChar(150)
+  environment_type     String                 @default("PRODUCTION_SSOP") @db.VarChar(50)
+  branch_id            BigInt?
+  linked_asset_id      BigInt?
+  frequency_type       String                 @default("DAILY") @db.VarChar(50)
+  checklist_items_json Json
+  is_active            Boolean                @default(true)
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  companies            companies              @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sanit_zones_company")
+  branches             branches?              @relation(fields: [branch_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_sanit_zones_branch")
+  sanitation_task_logs sanitation_task_logs[]
+
+  @@unique([company_id, zone_code], map: "ux_sanit_zones_code")
+  @@index([company_id], map: "ix_sanit_zones_company")
+  @@index([branch_id], map: "ix_sanit_zones_branch")
+  @@index([environment_type], map: "ix_sanit_zones_env")
+}
+
+model sanitation_task_logs {
+  id                           BigInt                @id @default(autoincrement())
+  company_id                   BigInt
+  task_number                  String                @db.VarChar(50)
+  zone_id                      BigInt
+  worker_id                    BigInt?
+  worker_code_snapshot         String?               @db.VarChar(50)
+  worker_name_snapshot         String?               @db.VarChar(150)
+  supervisor_id                BigInt?
+  supervisor_name              String?               @db.VarChar(150)
+  task_type                    String                @default("SCHEDULED_SSOP") @db.VarChar(50)
+  checklist_results_json       Json?
+  before_photo_url             String?               @db.Text
+  after_photo_url              String?               @db.Text
+  gps_coordinates              String?               @db.VarChar(100)
+  compliance_score             Decimal               @default(100.0) @db.Decimal(5, 2)
+  status                       String                @default("COMPLETED_BY_SUPERVISOR") @db.VarChar(50)
+  linked_maintenance_ticket_id  BigInt?
+  linked_fleet_vehicle_id      BigInt?
+  notes                        String?               @db.Text
+  completed_at                 DateTime?             @db.Timestamptz(6)
+  qa_verified_by_id            BigInt?
+  qa_verified_by_name          String?               @db.VarChar(150)
+  qa_verified_at               DateTime?             @db.Timestamptz(6)
+  qa_notes                     String?               @db.Text
+  created_at                   DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime              @default(now()) @db.Timestamptz(6)
+  companies                    companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sanit_tasks_company")
+  sanitation_zones             sanitation_zones      @relation(fields: [zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sanit_tasks_zone")
+  housekeeping_workers         housekeeping_workers? @relation(fields: [worker_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_sanit_tasks_worker")
+  maintenance_tickets          maintenance_tickets?  @relation(fields: [linked_maintenance_ticket_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_sanit_tasks_maint_ticket")
+
+  @@unique([company_id, task_number], map: "ux_sanit_tasks_code")
+  @@index([company_id], map: "ix_sanit_tasks_company")
+  @@index([zone_id], map: "ix_sanit_tasks_zone")
+  @@index([worker_id], map: "ix_sanit_tasks_worker")
+  @@index([status], map: "ix_sanit_tasks_status")
+  @@index([task_type], map: "ix_sanit_tasks_type")
+}
+
+model sanitation_supplies {
+  id                          BigInt                        @id @default(autoincrement())
+  company_id                  BigInt
+  code                        String                        @db.VarChar(50)
+  name                        String                        @db.VarChar(150)
+  category                    String                        @default("GENERAL_DETERGENT") @db.VarChar(50)
+  color_code                  String                        @default("BLUE_PRODUCTION") @db.VarChar(50)
+  unit                        String                        @default("لتر") @db.VarChar(30)
+  current_stock               Decimal                       @default(0) @db.Decimal(18, 2)
+  min_stock_level             Decimal                       @default(5) @db.Decimal(18, 2)
+  unit_cost                   Decimal                       @default(0) @db.Decimal(18, 2)
+  is_active                   Boolean                       @default(true)
+  created_at                  DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                      @default(now()) @db.Timestamptz(6)
+  companies                   companies                     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sanit_supplies_company")
+  sanitation_supply_issuances sanitation_supply_issuances[]
+
+  @@unique([company_id, code], map: "ux_sanit_supplies_code")
+  @@index([company_id], map: "ix_sanit_supplies_company")
+  @@index([category], map: "ix_sanit_supplies_category")
+  @@index([color_code], map: "ix_sanit_supplies_color")
+}
+
+model sanitation_supply_issuances {
+  id                  BigInt              @id @default(autoincrement())
+  company_id          BigInt
+  supply_id           BigInt
+  quantity            Decimal             @db.Decimal(18, 2)
+  issued_to_type      String              @default("SUPERVISOR") @db.VarChar(50)
+  issued_to_id        BigInt?
+  issued_to_name      String?             @db.VarChar(150)
+  supervisor_id       BigInt?
+  supervisor_name     String?             @db.VarChar(150)
+  unit_cost           Decimal             @default(0) @db.Decimal(18, 2)
+  total_cost          Decimal             @default(0) @db.Decimal(18, 2)
+  notes               String?             @db.Text
+  issued_at           DateTime            @default(now()) @db.Timestamptz(6)
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  companies           companies           @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sanit_issuance_company")
+  sanitation_supplies sanitation_supplies @relation(fields: [supply_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sanit_issuance_supply")
+
+  @@index([company_id], map: "ix_sanit_issuance_company")
+  @@index([supply_id], map: "ix_sanit_issuance_supply")
+  @@index([issued_to_type], map: "ix_sanit_issuance_to_type")
+}
+
+model personal_hygiene_checks {
+  id                        BigInt    @id @default(autoincrement())
+  company_id                BigInt
+  worker_or_employee_name   String    @db.VarChar(150)
+  employee_code             String    @db.VarChar(50)
+  department                String?   @db.VarChar(100)
+  supervisor_id             BigInt?
+  supervisor_name           String?   @db.VarChar(150)
+  uniform_clean             Boolean   @default(true)
+  hair_net_worn             Boolean   @default(true)
+  nails_trimmed             Boolean   @default(true)
+  no_open_wounds            Boolean   @default(true)
+  passed                    Boolean   @default(true)
+  notes                     String?   @db.Text
+  checked_at                DateTime  @default(now()) @db.Timestamptz(6)
+  created_at                DateTime  @default(now()) @db.Timestamptz(6)
+  companies                 companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_hygiene_checks_company")
+
+  @@index([company_id], map: "ix_hygiene_checks_company")
+  @@index([employee_code], map: "ix_hygiene_checks_emp")
+  @@index([passed], map: "ix_hygiene_checks_passed")
+  @@index([checked_at], map: "ix_hygiene_checks_date")
+}
+
+model custom_app_icons {
+  id             BigInt    @id @default(autoincrement())
+  company_id     BigInt
+  title          String    @db.VarChar(150)
+  icon_name      String    @default("LayoutGrid") @db.VarChar(50)
+  color          String    @default("amber") @db.VarChar(50)
+  badge_text     String?   @db.VarChar(50)
+  show_in_navbar Boolean   @default(true)
+  show_in_tabs   Boolean   @default(true)
+  order_index    Int       @default(0)
+  screens_json   Json
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+  companies      companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_custom_icons_company")
+
+  @@index([company_id], map: "ix_custom_icons_company")
 }

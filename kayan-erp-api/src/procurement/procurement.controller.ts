@@ -2,6 +2,19 @@ import { Controller, Get, Post, Body, Query, BadRequestException } from '@nestjs
 import { ProcurementService } from './procurement.service.js';
 
 // تعريف الـ DTO كـ class صريح لمنع خطأ TS1272 مع emitDecoratorMetadata
+export class CreateSupplierDto {
+  supplier_name!: string;
+  supplier_code?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  tax_number?: string;
+  payment_terms?: string;
+  credit_limit?: number;
+  notes?: string;
+  is_approved?: boolean;
+}
+
 export class CreatePurchaseOrderItemDto {
   itemId!: string | number;
   quantity!: number;
@@ -44,6 +57,15 @@ export class ProcurementController {
   @Get('suppliers')
   async getSuppliers() {
     return await this.procurementService.getSuppliers();
+  }
+
+  // تسجيل مورد معتمد جديد
+  @Post('suppliers')
+  async createSupplier(@Body() body: CreateSupplierDto) {
+    if (!body || !body.supplier_name) {
+      throw new BadRequestException('اسم المورد مطلوب');
+    }
+    return await this.procurementService.createSupplier(body);
   }
 
   // 2. استعراض أوامر وفواتير الشراء

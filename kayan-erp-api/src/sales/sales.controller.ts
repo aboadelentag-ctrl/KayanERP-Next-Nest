@@ -1,5 +1,19 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { SalesService } from './sales.service.js';
+
+export class CreateCustomerDto {
+  customer_name!: string;
+  customer_code?: string;
+  customer_type?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  tax_number?: string;
+  payment_terms?: string;
+  credit_limit?: number;
+  notes?: string;
+  active?: boolean;
+}
 
 // تعريف DTOs كـ class صريح لمنع خطأ TS1272 مع emitDecoratorMetadata
 export class PosCheckoutItemDto {
@@ -82,10 +96,39 @@ export class SalesController {
     return await this.salesService.getProducts(category);
   }
 
-  // 1. جلب قائمة العملاء وأرصدة حساباتهم
+  // 1. جلب قائمة العملاء وأرصدة حساباتهم مع الفلترة
   @Get('customers')
-  async getCustomers() {
-    return await this.salesService.getCustomers();
+  async getCustomers(
+    @Query('customerType') customerType?: string,
+    @Query('activeOnly') activeOnly?: string,
+    @Query('search') search?: string,
+  ) {
+    const isActiveOnly = activeOnly !== undefined ? activeOnly === 'true' : true;
+    return await this.salesService.getCustomers({ customerType, activeOnly: isActiveOnly, search });
+  }
+
+  // 1.1 استرجاع بيانات عميل محدد
+  @Get('customers/:id')
+  async getCustomerById(@Param('id') id: string) {
+    return await this.salesService.getCustomerById(id);
+  }
+
+  // 1.2 تسجيل عميل أو تاجر جملة جديد
+  @Post('customers')
+  async createCustomer(@Body() body: CreateCustomerDto) {
+    return await this.salesService.createCustomer(body);
+  }
+
+  // 1.3 تحديث بيانات عميل
+  @Put('customers/:id')
+  async updateCustomer(@Param('id') id: string, @Body() body: Partial<CreateCustomerDto>) {
+    return await this.salesService.updateCustomer(id, body);
+  }
+
+  // 1.4 إلغاء تفعيل عميل
+  @Delete('customers/:id')
+  async deleteCustomer(@Param('id') id: string) {
+    return await this.salesService.deleteCustomer(id);
   }
 
   // 2. جلب فواتير وأوامر البيع مع الفلترة

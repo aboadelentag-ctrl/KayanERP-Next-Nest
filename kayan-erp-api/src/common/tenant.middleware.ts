@@ -40,20 +40,20 @@ export class TenantMiddleware implements NestMiddleware {
         authenticatedRole = payload.role;
         authenticatedUserId = payload.userId;
         authenticatedUsername = payload.username;
-        isPlatformAdmin = payload.role === 'PLATFORM_SUPER_ADMIN';
+        isPlatformAdmin = payload.role === 'PLATFORM_SUPER_ADMIN' || payload.role === 'SUPER_ADMIN';
       } else if (!isPublic) {
         // إذا كان هناك رمز غير صالح في مسار محمي
         // دعم رمزي للتطوير المحلي إذا توافر headerRole أو headerCompanyId
         if (headerCompanyId) {
           authenticatedCompanyId = String(headerCompanyId);
           authenticatedRole = headerRole || 'USER';
-          isPlatformAdmin = headerRole === 'PLATFORM_SUPER_ADMIN';
+          isPlatformAdmin = headerRole === 'PLATFORM_SUPER_ADMIN' || headerRole === 'SUPER_ADMIN';
         }
       }
     } else if (headerCompanyId) {
       authenticatedCompanyId = String(headerCompanyId);
       authenticatedRole = headerRole || 'USER';
-      isPlatformAdmin = headerRole === 'PLATFORM_SUPER_ADMIN';
+      isPlatformAdmin = headerRole === 'PLATFORM_SUPER_ADMIN' || headerRole === 'SUPER_ADMIN';
     }
 
     // 1. كشف ومنع محاولات التلاعب بمعرف المنشأة (Tenant Spoofing Prevention)

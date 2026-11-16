@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { SocketProvider } from './context/SocketContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { CustomIconsProvider } from './context/CustomIconsContext';
 import GlobalNavbar from './components/GlobalNavbar';
+import ManageIconModal from './components/ManageIconModal';
+import AxiosInterceptor from './components/AxiosInterceptor';
 
 export const metadata: Metadata = {
   title: 'كيان ERP - مصانع وحلواني أبو عادل',
@@ -27,8 +30,12 @@ export default function RootLayout({
       <body className="antialiased transition-colors duration-200">
         <ThemeProvider>
           <SocketProvider>
-            <GlobalNavbar />
-            <main>{children}</main>
+            <CustomIconsProvider>
+              <AxiosInterceptor />
+              <GlobalNavbar />
+              <ManageIconModal />
+              <main>{children}</main>
+            </CustomIconsProvider>
           </SocketProvider>
         </ThemeProvider>
       </body>

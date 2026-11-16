@@ -25,6 +25,15 @@ import { BranchesModule } from './branches/branches.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CompaniesModule } from './companies/companies.module.js';
 import { TreasuryModule } from './treasury/treasury.module.js';
+import { PayablesModule } from './payables/payables.module.js';
+import { MesModule } from './mes/mes.module.js';
+import { QualityModule } from './quality/quality.module.js';
+import { AmsModule } from './ams/ams.module.js';
+import { CallCenterModule } from './call-center/call-center.module.js';
+import { EngineeringModule } from './engineering/engineering.module.js';
+import { HousekeepingModule } from './housekeeping/housekeeping.module.js';
+import { NavigationModule } from './navigation/navigation.module.js';
+import { FinishedGoodsModule } from './finished-goods/finished-goods.module.js';
 import { TenantMiddleware } from './common/tenant.middleware.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -59,6 +68,15 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     AuthModule,
     CompaniesModule,
     TreasuryModule,
+    PayablesModule,
+    MesModule,
+    QualityModule,
+    AmsModule,
+    CallCenterModule,
+    EngineeringModule,
+    HousekeepingModule,
+    NavigationModule,
+    FinishedGoodsModule,
   ],
   controllers: [AppController],
   providers: [

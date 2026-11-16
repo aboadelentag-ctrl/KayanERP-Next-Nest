@@ -64,12 +64,12 @@ export default function CompaniesPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // التحقق من الصلاحيات: مقصور حصراً على SUPER_ADMIN
+    // التحقق من الصلاحيات: مقصور حصراً على سوبر أدمن المنصة
     if (typeof window !== 'undefined') {
       try {
         const u = localStorage.getItem('kayan_user');
         const user = u ? JSON.parse(u) : null;
-        if (!user || user.role !== 'SUPER_ADMIN') {
+        if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'PLATFORM_SUPER_ADMIN')) {
           setIsAuthorized(false);
           let countdown = 3;
           const interval = setInterval(() => {
@@ -271,7 +271,7 @@ export default function CompaniesPage() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen p-6 max-w-7xl mx-auto space-y-6">
+    <div dir="rtl" className="min-h-screen p-3 sm:p-5 w-full space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 erp-card p-6 rounded-2xl shadow-sm border">
         <div>

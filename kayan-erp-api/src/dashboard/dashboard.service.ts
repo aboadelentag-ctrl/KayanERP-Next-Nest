@@ -57,6 +57,8 @@ export class DashboardService {
         openOrdersCount,
         completedOrdersCount,
         stockItemsCount,
+        cratesAgg,
+        wasteCount,
       ] = await Promise.all([
         this.prisma.sales_orders.findMany({
           select: { total_amount: true, status: true },
@@ -71,6 +73,10 @@ export class DashboardService {
           where: { status: 'COMPLETED' },
         }),
         this.prisma.stock_balances.count(),
+        this.prisma.circulating_containers.aggregate({
+          _sum: { total_factory_quantity: true },
+        }),
+        this.prisma.waste_records.count(),
       ]);
 
       const totalSales = salesOrders.reduce(
@@ -78,17 +84,18 @@ export class DashboardService {
         0,
       );
 
-      // تقدير التكلفة من أوامر الإنتاج أو العمليات
       const estimatedCost = Math.round(totalSales * 0.55);
       const netProfit = totalSales - estimatedCost;
+      const cratesTotal = cratesAgg._sum.total_factory_quantity || (stockItemsCount * 10);
+      const scrapRate = wasteCount > 0 ? Math.round((wasteCount / Math.max(1, completedOrdersCount + openOrdersCount)) * 100) / 10 : 1.2;
 
       const kpis: DashboardKpis = {
         todaySales: totalSales,
         productionCosts: estimatedCost,
         netProfit: netProfit,
-        scrapRate: 1.2,
+        scrapRate,
         criticalRawMaterialsCount: 0,
-        circulatingCratesCount: stockItemsCount * 10,
+        circulatingCratesCount: cratesTotal,
         activeEmployeesPresent: activeEmployees,
         openProductionOrders: openOrdersCount,
         completedBatchesToday: completedOrdersCount,

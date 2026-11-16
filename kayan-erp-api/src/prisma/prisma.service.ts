@@ -27,6 +27,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       'departments',
       'employees',
       'item_categories',
+      'item_uom_conversions',
       'items',
       'job_titles',
       'journal_entries',
@@ -60,6 +61,29 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       }
 
       const modelName = params.model;
+
+      // عزل جدول المنشآت والشركات (Companies/Tenants) للمستخدمين غير السوبر أدمن
+      if (modelName === 'companies') {
+        const companyId = tenant.companyId;
+        if (['findFirst', 'findMany', 'count', 'aggregate'].includes(params.action)) {
+          params.args = params.args || {};
+          params.args.where = {
+            ...(params.args.where || {}),
+            id: companyId,
+          };
+        }
+        if (params.action === 'findUnique') {
+          const result = await next(params);
+          if (result && BigInt(result.id) !== companyId) {
+            return null;
+          }
+          return result;
+        }
+        if (['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany'].includes(params.action)) {
+          throw new Error('محاولة تعديل غير مصرح بها على جدول المنشآت المستأجرة (Multi-Tenant Violation)');
+        }
+      }
+
       if (modelName && modelsWithCompanyId.has(modelName)) {
         const companyId = tenant.companyId;
 

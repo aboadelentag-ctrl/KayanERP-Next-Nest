@@ -338,8 +338,8 @@ export default function HrManagementPage() {
   };
 
   return (
-    <main className="min-h-screen p-4 md:p-6 transition-colors duration-200">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <main className="min-h-screen transition-colors duration-200">
+      <div className="erp-container-fluid space-y-4">
 
         {/* شريط العنوان وأزرار التنقل السريع */}
         <header className="erp-card p-5 rounded-2xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4 transition-colors duration-200">

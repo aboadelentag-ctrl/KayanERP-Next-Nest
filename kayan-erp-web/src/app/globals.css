@@ -54,16 +54,141 @@ body {
 .erp-card {
   background-color: var(--card-bg);
   border-color: var(--card-border);
-  box-shadow: 0 4px 20px -2px rgba(4, 8, 23, 0.4);
+  box-shadow: 0 1px 4px 0 rgba(15, 23, 42, 0.08);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark .erp-card {
+  box-shadow: 0 4px 20px -2px rgba(4, 8, 23, 0.5);
 }
 
 .erp-sub {
   background-color: var(--sub-bg);
   border-color: var(--card-border);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .erp-muted {
   color: var(--text-muted);
+}
+
+/* تصحيح تباين الألوان في الوضع النهاري لكافة الشاشات (Light Mode High Contrast Rules) */
+html:not(.dark) {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
+  --card-border: #cbd5e1;
+  --sub-bg: #f8fafc;
+  --text-muted: #334155;
+}
+
+html:not(.dark) body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+/* في الوضع النهاري: تحويل النصوص الباهتة والصفراء إلى ألوان عالية التباين وواضحة جداً للقراءة */
+html:not(.dark) .text-slate-400,
+html:not(.dark) .text-gray-400 {
+  color: #334155 !important;
+}
+
+html:not(.dark) .text-slate-500,
+html:not(.dark) .text-gray-500 {
+  color: #1e293b !important;
+}
+
+html:not(.dark) .text-slate-300,
+html:not(.dark) .text-gray-300 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .text-slate-200,
+html:not(.dark) .text-gray-200 {
+  color: #020617 !important;
+}
+
+html:not(.dark) .text-slate-100,
+html:not(.dark) .text-gray-100 {
+  color: #020617 !important;
+}
+
+html:not(.dark) .text-amber-400,
+html:not(.dark) .text-amber-500 {
+  color: #92400e !important; /* لون كهرماني داكن عالي الوضوح في النهار */
+}
+
+html:not(.dark) .text-yellow-400,
+html:not(.dark) .text-yellow-500 {
+  color: #854d0e !important;
+}
+
+html:not(.dark) .bg-amber-500\/10,
+html:not(.dark) .bg-amber-500\/20 {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fde68a !important;
+}
+
+/* كروت وخلفيات النهار */
+html:not(.dark) .bg-slate-900,
+html:not(.dark) .bg-slate-950 {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+html:not(.dark) .bg-slate-900\/40,
+html:not(.dark) .bg-slate-900\/50,
+html:not(.dark) .bg-slate-950\/40,
+html:not(.dark) .bg-slate-950\/60 {
+  background-color: #f8fafc;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+html:not(.dark) .bg-slate-800,
+html:not(.dark) .bg-slate-800\/30,
+html:not(.dark) .bg-slate-800\/40 {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+html:not(.dark) .border-slate-800,
+html:not(.dark) .border-slate-700,
+html:not(.dark) .border-gray-800,
+html:not(.dark) .border-gray-700 {
+  border-color: #cbd5e1 !important;
+}
+
+/* القوائم المنسدلة وحقول الإدخال في النهار */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #64748b !important;
+}
+
+html:not(.dark) .erp-input-compact {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) .erp-table-compact thead tr {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+html:not(.dark) .erp-table-compact tbody tr:hover {
+  background-color: #f8fafc !important;
 }
 
 /* Badges & Buttons */
@@ -89,6 +214,67 @@ body {
 
 .gold-glow {
   box-shadow: 0 0 25px -3px rgba(245, 158, 11, 0.25);
+}
+
+/* نمط كثافة الشاشات المؤسسية المضغوطة (Blazor Compact Enterprise Density) */
+.erp-container-fluid {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.75rem 1rem;
+}
+
+@media (min-width: 768px) {
+  .erp-container-fluid {
+    padding: 1rem 1.5rem;
+  }
+}
+
+.erp-table-compact {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.erp-table-compact th {
+  padding: 0.5rem 0.65rem;
+  font-size: 0.725rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.erp-table-compact td {
+  padding: 0.42rem 0.65rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.erp-input-compact {
+  height: 2.25rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.775rem;
+  border-radius: 0.5rem;
+  background-color: var(--card-bg);
+  color: var(--foreground);
+  border: 1px solid var(--card-border);
+  outline: none;
+}
+.erp-input-compact:focus {
+  border-color: var(--gold-primary);
+  box-shadow: 0 0 0 2px var(--gold-subtle);
+}
+
+.erp-btn-compact {
+  height: 2.125rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
 }
 
 /* قواعد الطباعة الرسمية القياسية A4 وإيصالات الكاشير الحرارية */

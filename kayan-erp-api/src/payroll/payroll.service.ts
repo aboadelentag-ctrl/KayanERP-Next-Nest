@@ -37,33 +37,7 @@ export class PayrollService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
     private readonly hrService: HrService,
-  ) {
-    this.seedDefaultPayrollBatch();
-  }
-
-  private seedDefaultPayrollBatch() {
-    this.payrollBatches = [
-      {
-        batchNumber: 'PAYROLL-2026-09',
-        month: 9,
-        year: 2026,
-        periodName: 'مسير رواتب سبتمبر 2026 (معتمد)',
-        totalEmployees: 8,
-        totalBasic: 65500,
-        totalAllowances: 9900,
-        totalOvertime: 4200,
-        totalGross: 79600,
-        totalInsurance: 7205,
-        totalAdvances: 3800,
-        totalPenalties: 650,
-        totalDeductions: 11655,
-        totalNet: 67945,
-        status: 'PAID',
-        approvedBy: 'المدير المالي - محاسب أول',
-        approvedAt: '2026-10-01T10:00:00.000Z',
-      },
-    ];
-  }
+  ) {}
 
   // 1. محرك احتساب المرتبات الشهري (GET /payroll/calculate)
   async calculatePayroll(month?: number, year?: number) {

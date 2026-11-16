@@ -1,4 +1,5 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AppService } from './app.service.js';
 import { SalesService } from './sales/sales.service.js';
 
@@ -10,8 +11,8 @@ export class AppController {
   ) {}
 
   @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  getHello(@Res() res: Response) {
+    return res.redirect('http://localhost:3001');
   }
 
   @Get('categories')

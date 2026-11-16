@@ -5,37 +5,41 @@ import Link from 'next/link';
 import axios from 'axios';
 import { useSocket } from './context/SocketContext';
 import { useTheme } from './context/ThemeContext';
+import { useCustomIcons } from './context/CustomIconsContext';
+import { getLucideIcon } from './components/ManageIconModal';
+import { APP_MODULES, ModuleItem } from './config/modules';
 import {
   Factory,
   Store,
   TrendingUp,
-  Boxes,
-  Truck,
-  ShoppingBag,
-  Calculator,
-  Users,
-  DollarSign,
-  BookOpen,
-  Scale,
-  Wrench,
-  Flame,
-  ShieldCheck,
-  Building2,
-  FileText,
   Warehouse,
   Wallet,
   Activity,
-  ArrowUpRight,
-  ArrowDownLeft,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
-  Sparkles,
-  Layers,
-  ChevronLeft,
   Building,
-  RefreshCw,
+  CheckCircle2,
+  Flame,
+  LayoutGrid,
+  Search,
+  Plus,
+  Settings,
+  SlidersHorizontal,
 } from 'lucide-react';
+
+function getGradientForColor(color?: string) {
+  switch (color) {
+    case 'teal': return 'from-teal-600 via-emerald-600 to-teal-700';
+    case 'emerald': return 'from-emerald-600 via-teal-600 to-green-700';
+    case 'blue': return 'from-blue-600 via-cyan-600 to-indigo-600';
+    case 'indigo': return 'from-indigo-600 via-purple-600 to-pink-600';
+    case 'purple': return 'from-purple-600 via-pink-600 to-rose-600';
+    case 'rose': return 'from-rose-600 via-red-600 to-amber-700';
+    case 'cyan': return 'from-cyan-600 via-teal-600 to-blue-700';
+    case 'amber':
+    default:
+      return 'from-amber-500 via-amber-600 to-orange-600';
+  }
+}
 
 interface EventLog {
   id: string;
@@ -47,10 +51,12 @@ interface EventLog {
 }
 
 export default function OperationalDashboard() {
-  const { socket, isConnected } = useSocket();
+  const { socket } = useSocket();
+  const { icons, activeTabId, setActiveTabId, openModal } = useCustomIcons();
   const [logs, setLogs] = useState<EventLog[]>([]);
   const [filterType, setFilterType] = useState<string>('ALL');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [appSearch, setAppSearch] = useState<string>('');
 
   const [metrics, setMetrics] = useState({
     todaySales: 0,
@@ -150,11 +156,114 @@ export default function OperationalDashboard() {
     return logs.filter((l) => l.type === filterType);
   }, [logs, filterType]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('custom_tab');
+      if (tabParam) {
+        setActiveTabId(tabParam);
+      }
+    }
+  }, [setActiveTabId]);
+
+  const allSystemScreens = useMemo(() => {
+    let list: any[] = [];
+    APP_MODULES.forEach((cat) => {
+      cat.items.forEach((item) => {
+        if (item.requiredRole && !item.requiredRole.includes(userRole)) {
+          return;
+        }
+        list.push(item);
+      });
+    });
+    return list;
+  }, [userRole]);
+
+  const currentCustomIcon = useMemo(() => {
+    if (activeTabId === 'ALL') return null;
+    return icons.find((ic) => ic.id === activeTabId) || null;
+  }, [icons, activeTabId]);
+
+  const filteredAppItems = useMemo(() => {
+    // 1. في حال اختيار أيقونة مخصصة محددة (مثل الإنتاج أو الجودة أو غيرها)
+    if (currentCustomIcon) {
+      let screens: any[] = Array.isArray(currentCustomIcon.screens_json) ? currentCustomIcon.screens_json : [];
+      if (appSearch.trim()) {
+        const q = appSearch.toLowerCase().trim();
+        screens = screens.filter(
+          (s) =>
+            s.label?.toLowerCase().includes(q) ||
+            (s.tag && s.tag.toLowerCase().includes(q)) ||
+            s.href?.toLowerCase().includes(q),
+        );
+      }
+      return screens.map((s) => {
+        const sysMatch = allSystemScreens.find((it) => it.href === s.href);
+        return {
+          href: s.href,
+          label: s.label,
+          tag: s.tag || (s.isCustom ? 'شاشة مخصصة جديدة' : sysMatch?.tag || ''),
+          icon: getLucideIcon(s.iconName || sysMatch?.icon?.name),
+          gradient: sysMatch?.gradient || getGradientForColor(currentCustomIcon.color),
+          isCustom: s.isCustom,
+        };
+      });
+    }
+
+    // 2. في حال اختيار "كافة التطبيقات والشاشات"
+    let allItems: any[] = [...allSystemScreens];
+
+    // إضافة أية شاشات جديدة مخصصة أضافها المستخدم داخل أيقوناته
+    icons.forEach((ic) => {
+      if (Array.isArray(ic.screens_json)) {
+        ic.screens_json.forEach((scr) => {
+          if (scr.isCustom && !allItems.some((it) => it.href === scr.href)) {
+            allItems.push({
+              href: scr.href,
+              label: scr.label,
+              tag: scr.tag || 'شاشة مخصصة جديدة',
+              icon: getLucideIcon(scr.iconName),
+              gradient: getGradientForColor(ic.color),
+              isCustom: true,
+            });
+          }
+        });
+      }
+    });
+
+    if (!appSearch.trim()) {
+      const primaryHrefs = [
+        '/mes/shop-floor',
+        '/pos/salesman',
+        '/procurement',
+        '/quality/inspections',
+        '/emergency-tasks',
+        '/dashboard',
+      ];
+      const primaryItems = primaryHrefs
+        .map((href) => allItems.find((it) => it.href === href))
+        .filter(Boolean);
+      const restItems = allItems.filter((it) => !primaryHrefs.includes(it.href));
+      allItems = [...primaryItems, ...restItems];
+    } else {
+      const q = appSearch.toLowerCase().trim();
+      allItems = allItems.filter(
+        (item) =>
+          item.label.toLowerCase().includes(q) ||
+          item.tag.toLowerCase().includes(q) ||
+          item.category?.toLowerCase().includes(q) ||
+          item.href.toLowerCase().includes(q),
+      );
+    }
+
+    return allItems;
+  }, [currentCustomIcon, icons, appSearch, allSystemScreens]);
+
   return (
-    <div dir="rtl" className="min-h-screen p-6 max-w-7xl mx-auto space-y-6">
+    <div dir="rtl" className="erp-container-fluid min-h-screen space-y-4 py-2">
       
       {/* 1. ترويسة القيادة المركزية وبيانات الوردية */}
-      <div className="erp-card p-6 rounded-3xl border shadow-sm relative overflow-hidden">
+      <div className="erp-card p-5 md:p-6 rounded-3xl border shadow-sm relative overflow-hidden">
         <div className="absolute top-0 left-0 w-80 h-80 bg-gradient-to-br from-amber-500/10 via-indigo-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 relative z-10">
@@ -174,422 +283,266 @@ export default function OperationalDashboard() {
               </span>
             </div>
 
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
               لوحة القيادة المركزية ومتابعة العمليات الصناعية
             </h1>
             <p className="text-xs erp-muted mt-1 max-w-2xl leading-relaxed">
               الربط المتزامن اللحظي لخطوط الإنتاج والتصنيع، أرصدة المستودعات التخصصية، نقاط بيع شبكة المعارض، وإدارة الخزائن والحسابات العامة
             </p>
           </div>
-
-          {/* أزرار الوصول والإجراءات السريعة */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/pos"
-              className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
-            >
-              <Store className="w-4 h-4" />
-              <span>كاشير المعارض POS</span>
-            </Link>
-
-            <Link
-              href="/treasury-vouchers"
-              className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black transition flex items-center gap-2 shadow-md shadow-teal-600/20 cursor-pointer"
-            >
-              <Wallet className="w-4 h-4" />
-              <span>سندات الخزينة</span>
-            </Link>
-
-            <Link
-              href="/production"
-              className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black transition flex items-center gap-2 shadow-md shadow-amber-500/20 cursor-pointer"
-            >
-              <Factory className="w-4 h-4" />
-              <span>صالة الإنتاج</span>
-            </Link>
-
-            <Link
-              href="/emergency-tasks"
-              className="px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition flex items-center gap-2 shadow-md shadow-rose-600/20 cursor-pointer"
-            >
-              <Flame className="w-4 h-4" />
-              <span>طوارئ SOS</span>
-            </Link>
-          </div>
         </div>
       </div>
 
       {/* 2. شريط المؤشرات الحيوية الكبرى (Executive KPIs) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         
         {/* KPI 1: صالات الإنتاج */}
-        <div className="erp-card p-5 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-amber-500/40 transition">
-          <div className="flex justify-between items-start mb-2">
+        <div className="erp-card p-4 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-amber-500/40 transition">
+          <div className="flex justify-between items-start mb-1.5">
             <span className="text-xs font-bold erp-muted">أوامر الإنتاج والتصنيع</span>
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500">
-              <Factory className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+              <Factory className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black font-mono">{metrics.completedBatches + metrics.openOrders} أمر</div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] font-bold text-emerald-500">
+          <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-bold text-emerald-500">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>{metrics.completedBatches} وجبة منتهية • {metrics.openOrders} قيد التشغيل</span>
           </div>
         </div>
 
         {/* KPI 2: مبيعات اليوم */}
-        <div className="erp-card p-5 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-emerald-500/40 transition">
-          <div className="flex justify-between items-start mb-2">
+        <div className="erp-card p-4 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-emerald-500/40 transition">
+          <div className="flex justify-between items-start mb-1.5">
             <span className="text-xs font-bold erp-muted">إجمالي المبيعات المسجلة</span>
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500">
-              <TrendingUp className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+              <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black font-mono text-emerald-500">{metrics.todaySales.toLocaleString()} ج.م</div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] font-bold erp-muted">
+          <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-bold erp-muted">
             <span>من واقع الفواتير والبوالص بقاعدة البيانات</span>
           </div>
         </div>
 
         {/* KPI 3: الخزائن والسيولة */}
-        <div className="erp-card p-5 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-teal-500/40 transition">
-          <div className="flex justify-between items-start mb-2">
+        <div className="erp-card p-4 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-teal-500/40 transition">
+          <div className="flex justify-between items-start mb-1.5">
             <span className="text-xs font-bold erp-muted">صافي الربح التقديري</span>
-            <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-500">
-              <Wallet className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-teal-500/10 text-teal-500">
+              <Wallet className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black font-mono text-teal-500">{metrics.netProfit.toLocaleString()} ج.م</div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] font-bold erp-muted">
+          <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-bold erp-muted">
             <span>محسوب بعد تكلفة التشغيل والخامات</span>
           </div>
         </div>
 
         {/* KPI 4: أرصدة الخامات والمستودعات */}
-        <div className="erp-card p-5 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-indigo-500/40 transition">
-          <div className="flex justify-between items-start mb-2">
+        <div className="erp-card p-4 rounded-2xl border shadow-sm relative overflow-hidden group hover:border-indigo-500/40 transition">
+          <div className="flex justify-between items-start mb-1.5">
             <span className="text-xs font-bold erp-muted">الأصناف بالمستودعات</span>
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-500">
-              <Warehouse className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+              <Warehouse className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black font-mono">{metrics.itemsCount} صنف</div>
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] font-bold text-amber-500">
+          <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-bold text-amber-500">
             <span>{metrics.activeEmployees} موظف وفني مسجل بالمنظومة</span>
           </div>
         </div>
 
       </div>
 
-      {/* 3. قطاعات النظام الستة الكبرى (Enterprise Hubs) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-        {/* القطاع 1: التصنيع والتكاليف الصناعية */}
-        <div className="erp-card p-6 rounded-3xl border shadow-sm space-y-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                <Factory className="w-6 h-6" />
+      {/* 3. شبكة التطبيقات والشاشات الموحدة (Enterprise Screen Launchpad) */}
+      <div className="erp-card rounded-3xl border shadow-sm p-5 md:p-6 space-y-4">
+        {/* Header: Title, Subtitle, Search bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-amber-500/20">
+              <LayoutGrid className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black text-slate-900 dark:text-white">
+                  لوحة التطبيقات والشاشات الموحدة (Screen Launchpad)
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                  {filteredAppItems.length} شاشة متاحة
+                </span>
               </div>
-              <div>
-                <h3 className="font-black text-sm">صالة الإنتاج والتصنيع</h3>
-                <span className="text-[11px] erp-muted">إدارة التشغيل والمراحل وهوامش الربح</span>
-              </div>
+              <p className="text-xs erp-muted mt-0.5">
+                تصفح مباشر لكل شاشة وموديول عبر أيقونة تطبيق مستقلة وسريعة
+              </p>
             </div>
           </div>
 
-          <p className="text-xs erp-muted leading-relaxed">
-            متابعة أوامر التشغيل، توجيه العجين والخبز والتزيين، احتساب التكلفة المعيارية والفعلية للوصفات، وإدارة صرف الخامات بنظام FEFO.
-          </p>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs font-bold">
-            <Link
-              href="/production"
-              className="p-2.5 rounded-xl erp-sub hover:bg-amber-500/10 hover:text-amber-500 transition flex items-center justify-between"
-            >
-              <span>أوامر الإنتاج</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/costing"
-              className="p-2.5 rounded-xl erp-sub hover:bg-amber-500/10 hover:text-amber-500 transition flex items-center justify-between"
-            >
-              <span>التكاليف والتسعير</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/requisitions"
-              className="p-2.5 rounded-xl erp-sub hover:bg-amber-500/10 hover:text-amber-500 transition flex items-center justify-between"
-            >
-              <span>صرف الخامات FEFO</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/assets"
-              className="p-2.5 rounded-xl erp-sub hover:bg-amber-500/10 hover:text-amber-500 transition flex items-center justify-between"
-            >
-              <span>الماكينات والأصول</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* القطاع 2: المستودعات واللوجستيات والمشتريات */}
-        <div className="erp-card p-6 rounded-3xl border shadow-sm space-y-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                <Warehouse className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm">المخازن وسلاسل الإمداد</h3>
-                <span className="text-[11px] erp-muted">المستودعات التخصصية والمشتريات</span>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-xs erp-muted leading-relaxed">
-            إدارة أرصدة مستودعات الخامات والتام، فحص جودة المشتريات QC/GRN، أذونات تحويل المعارض مع أرقام اللوت، وتتبع حركة الصناديق الفارغة.
-          </p>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs font-bold">
-            <Link
-              href="/inventory"
-              className="p-2.5 rounded-xl erp-sub hover:bg-blue-500/10 hover:text-blue-500 transition flex items-center justify-between"
-            >
-              <span>أرصدة المستودعات</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/transfers"
-              className="p-2.5 rounded-xl erp-sub hover:bg-blue-500/10 hover:text-blue-500 transition flex items-center justify-between"
-            >
-              <span>تحويلات المعارض</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/procurement"
-              className="p-2.5 rounded-xl erp-sub hover:bg-blue-500/10 hover:text-blue-500 transition flex items-center justify-between"
-            >
-              <span>المشتريات وفحص QC</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/crates"
-              className="p-2.5 rounded-xl erp-sub hover:bg-blue-500/10 hover:text-blue-500 transition flex items-center justify-between"
-            >
-              <span>تتبع الصناديق</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* القطاع 3: نقاط البيع وشبكة المعارض */}
-        <div className="erp-card p-6 rounded-3xl border shadow-sm space-y-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                <Store className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm">المبيعات وشبكة المعارض</h3>
-                <span className="text-[11px] erp-muted">كاشير التجزئة وبوابة الفروع الـ 7</span>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-xs erp-muted leading-relaxed">
-            واجهة الكاشير اللمسية فائقة السرعة مع دعم طباعة إيصالات 80mm الحرارية، عقود الجملة، حسابات العملاء، ومراقبة مبيعات الفروع المباشرة.
-          </p>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs font-bold">
-            <Link
-              href="/pos"
-              className="p-2.5 rounded-xl erp-sub hover:bg-emerald-500/10 hover:text-emerald-500 transition flex items-center justify-between"
-            >
-              <span>كاشير المعارض POS</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/sales"
-              className="p-2.5 rounded-xl erp-sub hover:bg-emerald-500/10 hover:text-emerald-500 transition flex items-center justify-between"
-            >
-              <span>فواتير وعقود المبيعات</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/branches"
-              className="p-2.5 rounded-xl erp-sub hover:bg-emerald-500/10 hover:text-emerald-500 transition flex items-center justify-between"
-            >
-              <span>بوابة الفروع الـ 7</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/dashboard"
-              className="p-2.5 rounded-xl erp-sub hover:bg-emerald-500/10 hover:text-emerald-500 transition flex items-center justify-between"
-            >
-              <span>تحليلات BI المتقدمة</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* القطاع 4: الحسابات العامة وإدارة الخزائن */}
-        <div className="erp-card p-6 rounded-3xl border shadow-sm space-y-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-teal-500/10 text-teal-500 border border-teal-500/20">
-                <Wallet className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm">المالية والخزائن العامة</h3>
-                <span className="text-[11px] erp-muted">القبض والصرف ودفتر الأستاذ</span>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-xs erp-muted leading-relaxed">
-            إصدار سندات القبض والصرف، ضبط أرصدة الخزائن والصناديق، شجرة الحسابات الموحدة متعددة المستويات، والقوائم المالية وميزان المراجعة.
-          </p>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs font-bold">
-            <Link
-              href="/treasury-vouchers"
-              className="p-2.5 rounded-xl erp-sub hover:bg-teal-500/10 hover:text-teal-500 transition flex items-center justify-between"
-            >
-              <span>سندات القبض والصرف</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/accounting"
-              className="p-2.5 rounded-xl erp-sub hover:bg-teal-500/10 hover:text-teal-500 transition flex items-center justify-between"
-            >
-              <span>شجرة الحسابات والقيود</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/accounting/reports"
-              className="p-2.5 rounded-xl erp-sub hover:bg-teal-500/10 hover:text-teal-500 transition flex items-center justify-between"
-            >
-              <span>القوائم المالية والميزان</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/dashboard"
-              className="p-2.5 rounded-xl erp-sub hover:bg-teal-500/10 hover:text-teal-500 transition flex items-center justify-between"
-            >
-              <span>مؤشرات الربحية والسيولة</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* القطاع 5: شؤون العاملين والمرتبات */}
-        <div className="erp-card p-6 rounded-3xl border shadow-sm space-y-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20">
-                <Users className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm">الموارد البشرية والمرتبات</h3>
-                <span className="text-[11px] erp-muted">شؤون العاملين وسجلات البصمة</span>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-xs erp-muted leading-relaxed">
-            إدارة بيانات الموظفين، تكامل ماكينات البصمة ZKTeco، احتساب التأخيرات والغياب والإضافي، وإعداد مسير الرواتب الشهرية والبدلات والسلف.
-          </p>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs font-bold">
-            <Link
-              href="/hr"
-              className="p-2.5 rounded-xl erp-sub hover:bg-rose-500/10 hover:text-rose-500 transition flex items-center justify-between"
-            >
-              <span>ملفات الموظفين والبصمة</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/payroll"
-              className="p-2.5 rounded-xl erp-sub hover:bg-rose-500/10 hover:text-rose-500 transition flex items-center justify-between"
-            >
-              <span>مسير المرتبات والأجور</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/users"
-              className="p-2.5 rounded-xl erp-sub hover:bg-rose-500/10 hover:text-rose-500 transition flex items-center justify-between"
-            >
-              <span>المستخدمين والصلاحيات</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/emergency-tasks"
-              className="p-2.5 rounded-xl erp-sub hover:bg-rose-500/10 hover:text-rose-500 transition flex items-center justify-between"
-            >
-              <span>تكليفات طوارئ الصيانة</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* القطاع 6: الحوكمة والمستأجرين والذكاء الاصطناعي */}
-        <div className="erp-card p-6 rounded-3xl border shadow-sm space-y-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
-                <Building className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-black text-sm">الحوكمة والمنشآت السحابية</h3>
-                <span className="text-[11px] erp-muted">إدارة الشركات والمستأجرين والنماذج</span>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-xs erp-muted leading-relaxed">
-            التحكم في المنشآت المستأجرة (Multi-Tenant Architecture)، تخصيص النماذج الديناميكية بمحرك Gemini، وإدارة مصفوفة الصلاحيات والحماية.
-          </p>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs font-bold">
-            {userRole === 'PLATFORM_SUPER_ADMIN' && (
-              <Link
-                href="/companies"
-                className="p-2.5 rounded-xl erp-sub hover:bg-amber-500/10 hover:text-amber-500 text-amber-500/90 transition flex items-center justify-between border border-amber-500/20"
+          {/* Quick Search */}
+          <div className="relative w-full md:w-80">
+            <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 erp-muted" />
+            <input
+              type="text"
+              placeholder="بحث سريع في الشاشات والتطبيقات..."
+              value={appSearch}
+              onChange={(e) => setAppSearch(e.target.value)}
+              className="w-full erp-input-compact pr-10 pl-8 rounded-2xl border erp-sub text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+            {appSearch && (
+              <button
+                onClick={() => setAppSearch('')}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs cursor-pointer"
               >
-                <span>بوابة مالك المنصة المركزية</span>
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </Link>
+                ✕
+              </button>
             )}
-            <Link
-              href="/forms"
-              className="p-2.5 rounded-xl erp-sub hover:bg-indigo-500/10 hover:text-indigo-500 transition flex items-center justify-between"
-            >
-              <span>النماذج الذكية بـ AI</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/login"
-              className="p-2.5 rounded-xl erp-sub hover:bg-indigo-500/10 hover:text-indigo-500 transition flex items-center justify-between"
-            >
-              <span>بوابة الدخول الموحد</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/users"
-              className="p-2.5 rounded-xl erp-sub hover:bg-indigo-500/10 hover:text-indigo-500 transition flex items-center justify-between"
-            >
-              <span>صلاحيات الموديولات RBAC</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </Link>
           </div>
         </div>
 
+        {/* Category Tabs: كافة التطبيقات وبجوارها الأيقونات المخصصة (الإنتاج، الجودة، والمزيد) */}
+        <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1">
+          {/* تبويب كافة التطبيقات */}
+          <button
+            onClick={() => setActiveTabId('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTabId === 'ALL'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                : 'erp-sub hover:opacity-80 border'
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+            <span>كافة التطبيقات والشاشات ({allSystemScreens.length})</span>
+          </button>
+
+          {/* الأيقونات المخصصة التي تم تفعيل ظهورها في التبويبات */}
+          {icons.filter((ic) => ic.show_in_tabs).map((icon) => {
+            const IconComp = getLucideIcon(icon.icon_name);
+            const isSelected = activeTabId === icon.id;
+            const screensCount = Array.isArray(icon.screens_json) ? icon.screens_json.length : 0;
+
+            return (
+              <button
+                key={icon.id}
+                onClick={() => setActiveTabId(icon.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                    : 'erp-sub hover:opacity-80 border'
+                }`}
+              >
+                <IconComp className="w-3.5 h-3.5 shrink-0" />
+                <span>{icon.title}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  isSelected ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-slate-800 text-slate-300'
+                }`}>
+                  {screensCount}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* زر إضافة أيقونة جديدة بجوار كافة التطبيقات */}
+          <button
+            onClick={() => openModal(null)}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-dashed border-amber-500/60 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 shadow-sm"
+            title="إضافة أيقونة جديدة وتحديد شاشاتها"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>إضافة أيقونة جديدة</span>
+          </button>
+
+          {/* زر تعديل شاشات الأيقونة النشطة الحالية */}
+          {currentCustomIcon && (
+            <button
+              onClick={() => openModal(currentCustomIcon)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm"
+              title={`تعديل شاشات أيقونة ${currentCustomIcon.title}`}
+            >
+              <Settings className="w-3.5 h-3.5 text-amber-400" />
+              <span>تعديل شاشات الأيقونة</span>
+            </button>
+          )}
+        </div>
+
+        {/* Grid of App Screen Icons */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 pt-2">
+          {filteredAppItems.length === 0 ? (
+            <div className="col-span-full py-12 text-center text-xs erp-muted erp-sub rounded-2xl border border-dashed space-y-3">
+              <Search className="w-6 h-6 mx-auto mb-1 text-slate-400 opacity-60" />
+              <p className="font-bold">
+                {currentCustomIcon
+                  ? `أيقونة "${currentCustomIcon.title}" لا تحتوي على شاشات بعد أو لم تطابق البحث`
+                  : `لا توجد شاشات مطابقة لبحثك "${appSearch}"`}
+              </p>
+              {currentCustomIcon ? (
+                <button
+                  onClick={() => openModal(currentCustomIcon)}
+                  className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs inline-flex items-center gap-1.5 shadow-md shadow-amber-500/20"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>تحديد الشاشات داخل أيقونة {currentCustomIcon.title} الآن</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setAppSearch(''); setActiveTabId('ALL'); }}
+                  className="mt-2 text-amber-500 hover:underline font-bold text-xs cursor-pointer block mx-auto"
+                >
+                  إعادة ضبط البحث وعرض كافة الشاشات
+                </button>
+              )}
+            </div>
+          ) : (
+            filteredAppItems.map((item) => {
+              const IconComponent = item.icon || LayoutGrid;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group erp-sub p-4 rounded-3xl border hover:border-amber-500/50 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-200 flex flex-col items-center text-center gap-3 cursor-pointer relative overflow-hidden"
+                >
+                  {/* Subtle Glow in Background */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                  {/* شارة التطبيقات التشغيلية الرئيسية أو الشاشات المخصصة */}
+                  {item.isCustom ? (
+                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-teal-500/15 text-teal-400 border border-teal-500/30">
+                      شاشة مخصصة
+                    </span>
+                  ) : (
+                    ['/mes/shop-floor', '/pos/salesman', '/procurement', '/quality/inspections', '/emergency-tasks', '/dashboard'].includes(item.href) &&
+                    activeTabId === 'ALL' &&
+                    !appSearch && (
+                      <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                        رئيسي
+                      </span>
+                    )
+                  )}
+
+                  {/* 3D App Icon Badge */}
+                  <div
+                    className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${item.gradient} flex items-center justify-center text-white shadow-lg shadow-black/30 group-hover:scale-110 group-hover:rotate-1 transition-all duration-200 shrink-0`}
+                  >
+                    <IconComponent className="w-7 h-7 drop-shadow-md" />
+                  </div>
+
+                  <div className="w-full relative z-10 space-y-1">
+                    <div className="font-black text-xs text-slate-900 dark:text-white group-hover:text-amber-500 transition-colors line-clamp-1">
+                      {item.label}
+                    </div>
+                    <div className="text-[10px] erp-muted line-clamp-1 leading-tight font-medium">
+                      {item.tag}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
+          )}
+        </div>
       </div>
 
       {/* 4. شريط العمليات والأحداث اللحظية (Live WebSocket Stream) */}
-      <div className="erp-card rounded-3xl border shadow-sm p-6 space-y-4">
+      <div className="erp-card rounded-3xl border shadow-sm p-5 md:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">

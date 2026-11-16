@@ -368,12 +368,12 @@ export default function BranchTransfersPage() {
 
   return (
     <div
-      className={`min-h-screen p-4 md:p-8 text-right transition-colors duration-200 ${
+      className={`min-h-screen text-right transition-colors duration-200 ${
         theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
       }`}
       dir="rtl"
     >
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="erp-container-fluid space-y-4">
 
         {/* 1. الترويسة الرئيسية وأدوات التحكم السريع */}
         <header

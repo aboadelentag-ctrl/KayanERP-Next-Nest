@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthService, TenantVerifyRequest, UserTenantLoginRequest } from './auth.service.js';
 
 export class VerifyTenantBodyDto {
@@ -62,19 +62,8 @@ export class AuthController {
   }
 
   @Get('me')
-  async getProfile() {
-    return {
-      success: true,
-      user: {
-        id: '1',
-        username: 'admin',
-        fullName: 'م. أحمد عادل (المدير التنفيذي)',
-        role: 'SUPER_ADMIN',
-        companyId: '1',
-        companyName: 'مصانع وحلواني أبو عادل (المركز الرئيسي)',
-        branchId: '1',
-        branchName: 'المصنع المركزي (سندوب)',
-      },
-    };
+  async getProfile(@Req() req: any) {
+    const userId = req?.user?.id;
+    return this.authService.getProfile(userId);
   }
 }
